@@ -1,9 +1,8 @@
 /**
- * Mock wallet helpers for blockchain testing
+ * Wallet creation utilities for BSV blockchain
  * Based on BSV wallet-toolbox-client
  */
 
-// @ts-nocheck - Optional dependency for blockchain tests
 import {
   PrivateKey,
   KeyDeriver,
