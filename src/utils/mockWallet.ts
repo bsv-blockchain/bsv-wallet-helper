@@ -19,24 +19,49 @@ import { WalletStorageManager, Services, Wallet, StorageClient, WalletSigner } f
  * @param storageURL - Storage provider URL
  * @param privateKey - Private key as hex string
  * @returns WalletClient instance (cast from WalletInterface)
+ * @throws Error if parameters are invalid or wallet creation fails
  */
 export async function makeWallet(
   chain: 'test' | 'main',
   storageURL: string,
   privateKey: string
 ): Promise<WalletClient> {
-  const keyDeriver = new KeyDeriver(new PrivateKey(privateKey, 'hex'));
-  const storageManager = new WalletStorageManager(keyDeriver.identityKey);
-  const signer = new WalletSigner(chain, keyDeriver, storageManager);
-  const services = new Services(chain);
-  const wallet = new Wallet(signer, services);
-  const client = new StorageClient(wallet, storageURL);
+  // Validate parameters
+  if (!chain) {
+    throw new Error('chain parameter is required (must be "test" or "main")');
+  }
+  if (chain !== 'test' && chain !== 'main') {
+    throw new Error(`Invalid chain "${chain}". Must be "test" or "main"`);
+  }
+  if (!storageURL) {
+    throw new Error('storageURL parameter is required');
+  }
+  if (!privateKey) {
+    throw new Error('privateKey parameter is required');
+  }
 
-  await client.makeAvailable();
-  await storageManager.addWalletStorageProvider(client);
+  try {
+    // Create key deriver from private key
+    const keyDeriver = new KeyDeriver(new PrivateKey(privateKey, 'hex'));
+    const storageManager = new WalletStorageManager(keyDeriver.identityKey);
+    const signer = new WalletSigner(chain, keyDeriver, storageManager);
+    const services = new Services(chain);
+    const wallet = new Wallet(signer, services);
+    const client = new StorageClient(wallet, storageURL);
 
-  // Cast to WalletClient for test compatibility
-  return wallet as unknown as WalletClient;
+    // Initialize wallet storage
+    await client.makeAvailable();
+    await storageManager.addWalletStorageProvider(client);
+
+    // Cast to WalletClient for test compatibility
+    return wallet as unknown as WalletClient;
+  } catch (error) {
+    // Provide helpful error context
+    if (error instanceof Error) {
+      throw new Error(`Failed to create wallet: ${error.message}`);
+    }
+    throw new Error('Failed to create wallet: Unknown error');
+  }
 }
 
 /**
