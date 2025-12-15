@@ -14,6 +14,7 @@ import {
     WalletCounterparty,
 } from "@bsv/sdk";
 import { calculatePreimage } from "../utils/createPreimage";
+import { WalletDerivationParams } from "../types/wallet";
 
 /**
  * P2PKH (Pay To Public Key Hash) class implementing ScriptTemplate.
@@ -43,50 +44,54 @@ export default class P2PKH implements ScriptTemplate {
     /**
      * Creates a P2PKH locking script using the instance's BRC-100 wallet to derive the public key.
      *
-     * @param pubkeyhash - Must be undefined to use this overload
-     * @param protocolID - Protocol identifier for key derivation
-     * @param keyID - Specific key identifier within the protocol
-     * @param counterparty - The counterparty for which the key is being derived
+     * @param walletParams - Wallet derivation parameters (protocolID, keyID, counterparty)
      * @returns A P2PKH locking script locked to the wallet's public key
      */
-    lock(
-        pubkeyhash: undefined,
-        protocolID: WalletProtocol,
-        keyID: string,
-        counterparty: WalletCounterparty
-    ): Promise<LockingScript>
+    lock(walletParams: WalletDerivationParams): Promise<LockingScript>
     async lock(
-        pubkeyhash?: string | number[],
-        protocolID: WalletProtocol = [2, "p2pkh"],
-        keyID: string = '0',
-        counterparty: WalletCounterparty = 'self'
+        pubkeyhashOrWalletParams: string | number[] | WalletDerivationParams
     ): Promise<LockingScript> {
         let data: number[] | undefined
 
         // Validate that at least one input method is provided
-        if (!pubkeyhash && !this.wallet) {
+        if (!pubkeyhashOrWalletParams && !this.wallet) {
             throw new Error('pubkeyhash or wallet is required')
         }
 
-        // If pubkeyhash is provided, use it directly
-        if (pubkeyhash) {
-            if (typeof pubkeyhash === 'string') {
+        // Check if using direct pubkeyhash or wallet derivation
+        if (typeof pubkeyhashOrWalletParams === 'string' || Array.isArray(pubkeyhashOrWalletParams)) {
+            // Use pubkeyhash directly
+            if (typeof pubkeyhashOrWalletParams === 'string') {
                 // If it's a hex string, treat it as a public key and hash it
-                const pubKeyToHash = PublicKey.fromString(pubkeyhash)
+                const pubKeyToHash = PublicKey.fromString(pubkeyhashOrWalletParams)
                 const hash = pubKeyToHash.toHash() as number[]
                 data = hash
             } else {
                 // If it's already a byte array, use it as the hash
-                data = pubkeyhash
+                data = pubkeyhashOrWalletParams
             }
-        }
-
-        // If wallet is provided (and no pubkeyhash), derive the public key from the wallet
-        if (this.wallet && !pubkeyhash) {
+        } else if (pubkeyhashOrWalletParams) {
+            // Use wallet to derive public key
+            if (!this.wallet) {
+                throw new Error('Wallet is required when using wallet derivation parameters')
+            }
+            const { protocolID, keyID, counterparty } = pubkeyhashOrWalletParams
             const { publicKey } = await this.wallet.getPublicKey({
                 protocolID,
                 keyID,
                 counterparty
+            })
+            const pubKeyToHash = PublicKey.fromString(publicKey)
+            data = pubKeyToHash.toHash() as number[]
+        } else {
+            // No params provided, try to use wallet with defaults
+            if (!this.wallet) {
+                throw new Error('pubkeyhash or wallet is required')
+            }
+            const { publicKey } = await this.wallet.getPublicKey({
+                protocolID: [2, "p2pkh"],
+                keyID: '0',
+                counterparty: 'self'
             })
             const pubKeyToHash = PublicKey.fromString(publicKey)
             data = pubKeyToHash.toHash() as number[]

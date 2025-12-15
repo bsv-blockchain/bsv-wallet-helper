@@ -82,17 +82,12 @@ describe('P2PKH locking script', () => {
       const privateKey = new PrivateKey(4);
       const wallet = await makeWallet('test', storageURL, privateKey.toHex());
 
-      const protocolID = [2, 'p2pkh'] as WalletProtocol;
-      const keyID = '0';
-      const counterparty = 'self' as WalletCounterparty;
-
       const p2pkh = new P2PKH(wallet);
-      const lockingScript = await p2pkh.lock(
-        undefined,
-        protocolID,
-        keyID,
-        counterparty
-      );
+      const lockingScript = await p2pkh.lock({
+        protocolID: [2, 'p2pkh'] as WalletProtocol,
+        keyID: '0',
+        counterparty: 'self' as WalletCounterparty
+      });
 
       // Verify the script structure
       const scriptChunks = lockingScript.chunks;
@@ -123,12 +118,11 @@ describe('P2PKH locking script', () => {
       const p2pkhWithoutWallet = new P2PKH();
 
       // Lock with wallet
-      const lockingScriptFromWallet = await p2pkhWithWallet.lock(
-        undefined,
+      const lockingScriptFromWallet = await p2pkhWithWallet.lock({
         protocolID,
         keyID,
         counterparty
-      );
+      });
 
       // Lock with public key string
       const lockingScriptFromPubKey = await p2pkhWithoutWallet.lock(publicKey);
