@@ -77,6 +77,32 @@ export default class OrdP2PKH implements ScriptTemplate {
 		inscription?: Inscription,
 		metaData?: MAP
 	): Promise<LockingScript> {
+		// Validate inscription structure if provided
+		if (inscription !== undefined) {
+			if (typeof inscription !== 'object' || inscription === null) {
+				throw new Error('inscription must be an object with dataB64 and contentType properties');
+			}
+			if (!inscription.dataB64 || typeof inscription.dataB64 !== 'string') {
+				throw new Error('inscription.dataB64 is required and must be a base64 string');
+			}
+			if (!inscription.contentType || typeof inscription.contentType !== 'string') {
+				throw new Error('inscription.contentType is required and must be a string (MIME type)');
+			}
+		}
+
+		// Validate MAP metadata structure if provided
+		if (metaData !== undefined) {
+			if (typeof metaData !== 'object' || metaData === null) {
+				throw new Error('metaData must be an object');
+			}
+			if (!metaData.app || typeof metaData.app !== 'string') {
+				throw new Error('metaData.app is required and must be a string');
+			}
+			if (!metaData.type || typeof metaData.type !== 'string') {
+				throw new Error('metaData.type is required and must be a string');
+			}
+		}
+
 		let lockingScript: LockingScript;
 
 		// Check if using direct pubkeyhash or wallet derivation

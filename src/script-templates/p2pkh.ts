@@ -17,6 +17,34 @@ import { calculatePreimage } from "../utils/createPreimage";
 import { WalletDerivationParams } from "../types/wallet";
 
 /**
+ * Validates wallet derivation parameters at runtime
+ */
+function validateWalletDerivationParams(params: any, paramName: string = 'parameters'): void {
+    if (!params || typeof params !== 'object') {
+        throw new Error(`Invalid ${paramName}: must be an object with protocolID and keyID`);
+    }
+    if (!params.protocolID) {
+        throw new Error(`Invalid ${paramName}: protocolID is required`);
+    }
+    if (!Array.isArray(params.protocolID) || params.protocolID.length !== 2) {
+        throw new Error(`Invalid ${paramName}: protocolID must be an array of [number, string]`);
+    }
+    if (typeof params.protocolID[0] !== 'number' || typeof params.protocolID[1] !== 'string') {
+        throw new Error(`Invalid ${paramName}: protocolID must be [number, string]`);
+    }
+    if (params.keyID === undefined || params.keyID === null) {
+        throw new Error(`Invalid ${paramName}: keyID is required`);
+    }
+    if (typeof params.keyID !== 'string') {
+        throw new Error(`Invalid ${paramName}: keyID must be a string`);
+    }
+    // counterparty is optional, defaults to 'self'
+    if (params.counterparty !== undefined && typeof params.counterparty !== 'string') {
+        throw new Error(`Invalid ${paramName}: counterparty must be a string (or omit for default "self")`);
+    }
+}
+
+/**
  * P2PKH (Pay To Public Key Hash) class implementing ScriptTemplate.
  *
  * This class provides methods to create Pay To Public Key Hash locking and unlocking scripts
@@ -59,23 +87,22 @@ export default class P2PKH implements ScriptTemplate {
         }
 
         // Check if using direct pubkeyhash or wallet derivation
-        if (typeof pubkeyhashOrWalletParams === 'string' || Array.isArray(pubkeyhashOrWalletParams)) {
-            // Use pubkeyhash directly
-            if (typeof pubkeyhashOrWalletParams === 'string') {
-                // If it's a hex string, treat it as a public key and hash it
-                const pubKeyToHash = PublicKey.fromString(pubkeyhashOrWalletParams)
-                const hash = pubKeyToHash.toHash() as number[]
-                data = hash
-            } else {
-                // If it's already a byte array, use it as the hash
-                data = pubkeyhashOrWalletParams
-            }
+        if (typeof pubkeyhashOrWalletParams === 'string') {
+            // Use public key string directly
+            const pubKeyToHash = PublicKey.fromString(pubkeyhashOrWalletParams)
+            const hash = pubKeyToHash.toHash() as number[]
+            data = hash
+        } else if (Array.isArray(pubkeyhashOrWalletParams)) {
+            // Use byte array as hash directly
+            data = pubkeyhashOrWalletParams
         } else if (pubkeyhashOrWalletParams) {
-            // Use wallet to derive public key
+            // Use wallet to derive public key - validate params
+            validateWalletDerivationParams(pubkeyhashOrWalletParams, 'wallet derivation parameters')
+
             if (!this.wallet) {
                 throw new Error('Wallet is required when using wallet derivation parameters')
             }
-            const { protocolID, keyID, counterparty } = pubkeyhashOrWalletParams
+            const { protocolID, keyID, counterparty = 'self' } = pubkeyhashOrWalletParams
             const { publicKey } = await this.wallet.getPublicKey({
                 protocolID,
                 keyID,
@@ -97,12 +124,9 @@ export default class P2PKH implements ScriptTemplate {
             data = pubKeyToHash.toHash() as number[]
         }
 
-        // Validate the resulting hash
-        if (!data) {
-            throw new Error('Failed to generate public key hash')
-        }
-        if (data.length !== 20) {
-            throw new Error('P2PKH hash length must be 20 bytes')
+        // Final validation
+        if (!data || data.length !== 20) {
+            throw new Error('Failed to generate valid public key hash (must be 20 bytes)')
         }
 
         // Build the standard P2PKH locking script
@@ -147,6 +171,23 @@ export default class P2PKH implements ScriptTemplate {
     } {
         if (!this.wallet) {
             throw new Error('Wallet is required for unlocking')
+        }
+
+        // Validate parameters
+        if (!Array.isArray(protocolID) || protocolID.length !== 2) {
+            throw new Error('protocolID must be an array of [number, string]')
+        }
+        if (typeof keyID !== 'string') {
+            throw new Error('keyID must be a string')
+        }
+        if (counterparty !== undefined && typeof counterparty !== 'string') {
+            throw new Error('counterparty must be a string (or omit for default "self")')
+        }
+        if (!['all', 'none', 'single'].includes(signOutputs)) {
+            throw new Error('signOutputs must be "all", "none", or "single"')
+        }
+        if (typeof anyoneCanPay !== 'boolean') {
+            throw new Error('anyoneCanPay must be a boolean')
         }
 
         const wallet = this.wallet

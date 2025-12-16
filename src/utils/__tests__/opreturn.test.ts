@@ -183,12 +183,6 @@ describe('addOpReturnData', () => {
   });
 
   describe('Edge cases', () => {
-    it('should throw error when no fields provided', () => {
-      expect(() => addOpReturnData(baseLockingScript, [])).toThrow(
-        'At least one data field is required for OP_RETURN'
-      );
-    });
-
     it('should handle empty strings', () => {
       const result = addOpReturnData(baseLockingScript, ['']);
 
@@ -221,6 +215,79 @@ describe('addOpReturnData', () => {
       const asm = result.toASM();
       expect(asm).toContain('OP_RETURN');
       expect(asm).toContain(toHex(unicode));
+    });
+  });
+
+  describe('Runtime validation errors', () => {
+    it('should throw error when script is invalid', () => {
+      expect(() => addOpReturnData(null as any, ['test'])).toThrow(
+        'Invalid script parameter: must be a LockingScript instance'
+      );
+
+      expect(() => addOpReturnData({} as any, ['test'])).toThrow(
+        'Invalid script parameter: must be a LockingScript instance'
+      );
+
+      expect(() => addOpReturnData('not a script' as any, ['test'])).toThrow(
+        'Invalid script parameter: must be a LockingScript instance'
+      );
+    });
+
+    it('should throw error when fields is not an array', () => {
+      expect(() => addOpReturnData(baseLockingScript, 'not an array' as any)).toThrow(
+        'Invalid fields parameter: must be an array of strings or number arrays'
+      );
+
+      expect(() => addOpReturnData(baseLockingScript, { field: 'value' } as any)).toThrow(
+        'Invalid fields parameter: must be an array of strings or number arrays'
+      );
+
+      expect(() => addOpReturnData(baseLockingScript, 123 as any)).toThrow(
+        'Invalid fields parameter: must be an array of strings or number arrays'
+      );
+    });
+
+    it('should throw error when fields array is empty', () => {
+      expect(() => addOpReturnData(baseLockingScript, [])).toThrow(
+        'At least one data field is required for OP_RETURN'
+      );
+    });
+
+    it('should throw error when field has invalid type', () => {
+      expect(() => addOpReturnData(baseLockingScript, [123] as any)).toThrow(
+        'Invalid field at index 0: must be a string or number array, got number'
+      );
+
+      expect(() => addOpReturnData(baseLockingScript, [{ key: 'value' }] as any)).toThrow(
+        'Invalid field at index 0: must be a string or number array, got object'
+      );
+
+      expect(() => addOpReturnData(baseLockingScript, [true] as any)).toThrow(
+        'Invalid field at index 0: must be a string or number array, got boolean'
+      );
+    });
+
+    it('should throw error when field in middle of array is invalid', () => {
+      expect(() => addOpReturnData(baseLockingScript, ['valid', 123, 'also valid'] as any)).toThrow(
+        'Invalid field at index 1: must be a string or number array, got number'
+      );
+    });
+
+    it('should throw error when number array contains non-numbers', () => {
+      expect(() => addOpReturnData(baseLockingScript, [[0x01, 'not a number', 0x03]] as any)).toThrow(
+        'Invalid field at index 0: array contains non-number'
+      );
+    });
+
+    it('should validate large arrays efficiently with sampling', () => {
+      // Create a large array with a non-number in the middle
+      const largeArray = new Array(10000).fill(0xFF);
+      largeArray[5000] = 'not a number' as any;
+
+      // Should still catch the error through sampling
+      expect(() => addOpReturnData(baseLockingScript, [largeArray])).toThrow(
+        'Invalid field at index 0: array contains non-number'
+      );
     });
   });
 });

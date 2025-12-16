@@ -73,7 +73,7 @@ describe('P2PKH locking script', () => {
       const invalidHash = new Array(19).fill(0); // Wrong length
 
       const p2pkh = new P2PKH();
-      await expect(p2pkh.lock(invalidHash)).rejects.toThrow('P2PKH hash length must be 20 bytes');
+      await expect(p2pkh.lock(invalidHash)).rejects.toThrow('Failed to generate valid public key hash (must be 20 bytes)');
     });
   });
 

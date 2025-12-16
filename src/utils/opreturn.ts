@@ -52,8 +52,43 @@ export const addOpReturnData = (
   script: LockingScript,
   fields: (string | number[])[]
 ): LockingScript => {
-  if (!fields || fields.length === 0) {
+  // Validate script parameter
+  if (!script || typeof script.toASM !== 'function') {
+    throw new Error('Invalid script parameter: must be a LockingScript instance');
+  }
+
+  // Validate fields parameter
+  if (!Array.isArray(fields)) {
+    throw new Error('Invalid fields parameter: must be an array of strings or number arrays');
+  }
+
+  if (fields.length === 0) {
     throw new Error('At least one data field is required for OP_RETURN');
+  }
+
+  // Validate each field type
+  for (let i = 0; i < fields.length; i++) {
+    const field = fields[i];
+    const isString = typeof field === 'string';
+
+    if (!isString) {
+      if (!Array.isArray(field)) {
+        throw new Error(
+          `Invalid field at index ${i}: must be a string or number array, got ${typeof field}`
+        );
+      }
+
+      // For number arrays, validate only first 100 elements
+      const sampleSize = Math.min(field.length, 100);
+      for (let j = 0; j < sampleSize; j++) {
+        const idx = Math.floor((j / sampleSize) * field.length);
+        if (typeof field[idx] !== 'number') {
+          throw new Error(
+            `Invalid field at index ${i}: array contains non-number at position ${idx}`
+          );
+        }
+      }
+    }
   }
 
   // Convert all fields to hex

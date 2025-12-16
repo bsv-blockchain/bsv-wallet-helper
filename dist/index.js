@@ -86,6 +86,29 @@ function calculatePreimage(tx, inputIndex, signOutputs, anyoneCanPay, sourceSato
 }
 
 // src/script-templates/p2pkh.ts
+function validateWalletDerivationParams(params, paramName = "parameters") {
+  if (!params || typeof params !== "object") {
+    throw new Error(`Invalid ${paramName}: must be an object with protocolID and keyID`);
+  }
+  if (!params.protocolID) {
+    throw new Error(`Invalid ${paramName}: protocolID is required`);
+  }
+  if (!Array.isArray(params.protocolID) || params.protocolID.length !== 2) {
+    throw new Error(`Invalid ${paramName}: protocolID must be an array of [number, string]`);
+  }
+  if (typeof params.protocolID[0] !== "number" || typeof params.protocolID[1] !== "string") {
+    throw new Error(`Invalid ${paramName}: protocolID must be [number, string]`);
+  }
+  if (params.keyID === void 0 || params.keyID === null) {
+    throw new Error(`Invalid ${paramName}: keyID is required`);
+  }
+  if (typeof params.keyID !== "string") {
+    throw new Error(`Invalid ${paramName}: keyID must be a string`);
+  }
+  if (params.counterparty !== void 0 && typeof params.counterparty !== "string") {
+    throw new Error(`Invalid ${paramName}: counterparty must be a string (or omit for default "self")`);
+  }
+}
 var P2PKH = class {
   /**
    * Creates a new P2PKH instance.
@@ -100,19 +123,18 @@ var P2PKH = class {
     if (!pubkeyhashOrWalletParams && !this.wallet) {
       throw new Error("pubkeyhash or wallet is required");
     }
-    if (typeof pubkeyhashOrWalletParams === "string" || Array.isArray(pubkeyhashOrWalletParams)) {
-      if (typeof pubkeyhashOrWalletParams === "string") {
-        const pubKeyToHash = import_sdk2.PublicKey.fromString(pubkeyhashOrWalletParams);
-        const hash = pubKeyToHash.toHash();
-        data = hash;
-      } else {
-        data = pubkeyhashOrWalletParams;
-      }
+    if (typeof pubkeyhashOrWalletParams === "string") {
+      const pubKeyToHash = import_sdk2.PublicKey.fromString(pubkeyhashOrWalletParams);
+      const hash = pubKeyToHash.toHash();
+      data = hash;
+    } else if (Array.isArray(pubkeyhashOrWalletParams)) {
+      data = pubkeyhashOrWalletParams;
     } else if (pubkeyhashOrWalletParams) {
+      validateWalletDerivationParams(pubkeyhashOrWalletParams, "wallet derivation parameters");
       if (!this.wallet) {
         throw new Error("Wallet is required when using wallet derivation parameters");
       }
-      const { protocolID, keyID, counterparty } = pubkeyhashOrWalletParams;
+      const { protocolID, keyID, counterparty = "self" } = pubkeyhashOrWalletParams;
       const { publicKey } = await this.wallet.getPublicKey({
         protocolID,
         keyID,
@@ -132,11 +154,8 @@ var P2PKH = class {
       const pubKeyToHash = import_sdk2.PublicKey.fromString(publicKey);
       data = pubKeyToHash.toHash();
     }
-    if (!data) {
-      throw new Error("Failed to generate public key hash");
-    }
-    if (data.length !== 20) {
-      throw new Error("P2PKH hash length must be 20 bytes");
+    if (!data || data.length !== 20) {
+      throw new Error("Failed to generate valid public key hash (must be 20 bytes)");
     }
     return new import_sdk2.LockingScript([
       { op: import_sdk2.OP.OP_DUP },
@@ -167,6 +186,21 @@ var P2PKH = class {
   unlock(protocolID = [2, "p2pkh"], keyID = "0", counterparty = "self", signOutputs = "all", anyoneCanPay = false, sourceSatoshis, lockingScript) {
     if (!this.wallet) {
       throw new Error("Wallet is required for unlocking");
+    }
+    if (!Array.isArray(protocolID) || protocolID.length !== 2) {
+      throw new Error("protocolID must be an array of [number, string]");
+    }
+    if (typeof keyID !== "string") {
+      throw new Error("keyID must be a string");
+    }
+    if (counterparty !== void 0 && typeof counterparty !== "string") {
+      throw new Error('counterparty must be a string (or omit for default "self")');
+    }
+    if (!["all", "none", "single"].includes(signOutputs)) {
+      throw new Error('signOutputs must be "all", "none", or "single"');
+    }
+    if (typeof anyoneCanPay !== "boolean") {
+      throw new Error("anyoneCanPay must be a boolean");
     }
     const wallet = this.wallet;
     return {
@@ -223,6 +257,28 @@ var OrdP2PKH = class {
     this.p2pkh = new P2PKH(wallet);
   }
   async lock(pubkeyhashOrWalletParams, inscription, metaData) {
+    if (inscription !== void 0) {
+      if (typeof inscription !== "object" || inscription === null) {
+        throw new Error("inscription must be an object with dataB64 and contentType properties");
+      }
+      if (!inscription.dataB64 || typeof inscription.dataB64 !== "string") {
+        throw new Error("inscription.dataB64 is required and must be a base64 string");
+      }
+      if (!inscription.contentType || typeof inscription.contentType !== "string") {
+        throw new Error("inscription.contentType is required and must be a string (MIME type)");
+      }
+    }
+    if (metaData !== void 0) {
+      if (typeof metaData !== "object" || metaData === null) {
+        throw new Error("metaData must be an object");
+      }
+      if (!metaData.app || typeof metaData.app !== "string") {
+        throw new Error("metaData.app is required and must be a string");
+      }
+      if (!metaData.type || typeof metaData.type !== "string") {
+        throw new Error("metaData.type is required and must be a string");
+      }
+    }
     let lockingScript;
     if (typeof pubkeyhashOrWalletParams === "string" || Array.isArray(pubkeyhashOrWalletParams)) {
       lockingScript = await this.p2pkh.lock(pubkeyhashOrWalletParams);
@@ -340,8 +396,34 @@ var toHexField = (field) => {
   return import_sdk5.Utils.toHex(import_sdk5.Utils.toArray(field));
 };
 var addOpReturnData = (script, fields) => {
-  if (!fields || fields.length === 0) {
+  if (!script || typeof script.toASM !== "function") {
+    throw new Error("Invalid script parameter: must be a LockingScript instance");
+  }
+  if (!Array.isArray(fields)) {
+    throw new Error("Invalid fields parameter: must be an array of strings or number arrays");
+  }
+  if (fields.length === 0) {
     throw new Error("At least one data field is required for OP_RETURN");
+  }
+  for (let i = 0; i < fields.length; i++) {
+    const field = fields[i];
+    const isString = typeof field === "string";
+    if (!isString) {
+      if (!Array.isArray(field)) {
+        throw new Error(
+          `Invalid field at index ${i}: must be a string or number array, got ${typeof field}`
+        );
+      }
+      const sampleSize = Math.min(field.length, 100);
+      for (let j = 0; j < sampleSize; j++) {
+        const idx = Math.floor(j / sampleSize * field.length);
+        if (typeof field[idx] !== "number") {
+          throw new Error(
+            `Invalid field at index ${i}: array contains non-number at position ${idx}`
+          );
+        }
+      }
+    }
   }
   const hexFields = fields.map(toHexField);
   const baseAsm = script.toASM();

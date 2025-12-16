@@ -114,7 +114,7 @@ describe('OrdP2PKH locking script', () => {
 
       const ordP2pkh = new OrdP2PKH();
       await expect(ordP2pkh.lock(publicKeyHex, undefined, invalidMetaData))
-        .rejects.toThrow('MAP.app and MAP.type are required fields');
+        .rejects.toThrow('metaData.type is required and must be a string');
     });
   });
 
