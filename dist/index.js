@@ -399,6 +399,10 @@ var addOpReturnData = (script, fields) => {
   if (!script || typeof script.toASM !== "function") {
     throw new Error("Invalid script parameter: must be a LockingScript instance");
   }
+  const scriptAsm = script.toASM();
+  if (scriptAsm.includes("OP_RETURN")) {
+    throw new Error("Script already contains OP_RETURN. Cannot add multiple OP_RETURN statements to the same script.");
+  }
   if (!Array.isArray(fields)) {
     throw new Error("Invalid fields parameter: must be an array of strings or number arrays");
   }

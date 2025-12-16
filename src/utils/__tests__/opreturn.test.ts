@@ -233,6 +233,16 @@ describe('addOpReturnData', () => {
       );
     });
 
+    it('should throw error when script already contains OP_RETURN', () => {
+      // First call should succeed
+      const scriptWithOpReturn = addOpReturnData(baseLockingScript, ['first', 'data']);
+
+      // Second call on the same script should fail
+      expect(() => addOpReturnData(scriptWithOpReturn, ['second', 'data'])).toThrow(
+        'Script already contains OP_RETURN. Cannot add multiple OP_RETURN statements to the same script.'
+      );
+    });
+
     it('should throw error when fields is not an array', () => {
       expect(() => addOpReturnData(baseLockingScript, 'not an array' as any)).toThrow(
         'Invalid fields parameter: must be an array of strings or number arrays'
