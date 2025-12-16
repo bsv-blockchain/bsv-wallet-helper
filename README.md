@@ -13,7 +13,7 @@ Wallet-compatible script templates for Bitcoin SV (BSV) that support BRC-100 wal
 ## Installation
 
 ```bash
-npm install your-package-name
+npm install bsv-wallet-scripts
 ```
 
 ## Exported API
@@ -24,7 +24,7 @@ npm install your-package-name
 Wallet-compatible Pay-to-Public-Key-Hash template.
 
 ```typescript
-import { WalletP2PKH, type WalletDerivationParams } from 'your-package-name';
+import { WalletP2PKH, type WalletDerivationParams } from 'bsv-wallet-scripts';
 
 // Option 1: Direct public key/hash
 const p2pkh = new WalletP2PKH();
@@ -50,7 +50,7 @@ const unlockingTemplate = p2pkh.unlock(
 Wallet-compatible template for 1Sat Ordinals with inscription and MAP metadata support.
 
 ```typescript
-import { WalletOrdP2PKH, type Inscription, type MAP } from 'your-package-name';
+import { WalletOrdP2PKH, type Inscription, type MAP } from 'bsv-wallet-scripts';
 
 // Create ordinal with inscription and metadata
 const ordP2pkh = new WalletOrdP2PKH(wallet);
@@ -117,7 +117,7 @@ type MAP = {
 Creates a BRC-100 compatible wallet for testing or backend use.
 
 ```typescript
-import { makeWallet } from 'your-package-name';
+import { makeWallet } from 'bsv-wallet-scripts';
 
 const wallet = await makeWallet(
   'test',                    // Chain: 'test' or 'main'
@@ -137,7 +137,7 @@ const wallet = await makeWallet(
 Calculates the transaction preimage for signing.
 
 ```typescript
-import { calculatePreimage } from 'your-package-name';
+import { calculatePreimage } from 'bsv-wallet-scripts';
 
 const { preimage, signatureScope } = calculatePreimage(
   transaction,
@@ -160,6 +160,51 @@ const { preimage, signatureScope } = calculatePreimage(
 **Returns:** `{ preimage: number[], signatureScope: number }`
 
 **Throws:** `Error` if parameters are invalid or required data is missing
+
+#### `addOpReturnData(script, fields)`
+Appends OP_RETURN data fields to any locking script for adding metadata.
+
+```typescript
+import { addOpReturnData } from 'bsv-wallet-scripts';
+
+// Add plain text metadata
+const scriptWithMetadata = addOpReturnData(lockingScript, [
+  'MY_APP',
+  'action',
+  'transfer'
+]);
+
+// Add JSON data
+const metadata = { user: 'Alice', amount: 100 };
+const scriptWithJson = addOpReturnData(lockingScript, [
+  'MY_APP',
+  JSON.stringify(metadata)
+]);
+
+// Add hex hash
+const documentHash = 'a'.repeat(64); // 32-byte SHA256 hash
+const scriptWithHash = addOpReturnData(lockingScript, [documentHash]);
+
+// Mix types: text, hex, and byte arrays
+const scriptMixed = addOpReturnData(lockingScript, [
+  'APP_ID',           // Plain text (auto-converted to hex)
+  'deadbeef',         // Hex string (detected and preserved)
+  [0x01, 0x02, 0x03]  // Byte array (converted to hex)
+]);
+```
+
+**Parameters:**
+- `script`: `LockingScript` - The base locking script to append OP_RETURN data to
+- `fields`: `(string | number[])[]` - Array of data fields. Each field can be:
+  - Plain text string (auto-converted to hex)
+  - Hex string (detected by even length and valid hex chars, normalized to lowercase)
+  - Byte array (converted to hex)
+
+**Returns:** `LockingScript` - New locking script with OP_RETURN data appended
+
+**Throws:** `Error` if no fields are provided
+
+**Note:** This works with any script type (P2PKH, ordinals, etc.) and provides a generic way to add metadata without protocol-specific overhead.
 
 ## ⚠️ Important: Lock and Unlock Key Consistency
 
