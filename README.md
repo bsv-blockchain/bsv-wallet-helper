@@ -18,6 +18,51 @@ npm install bsv-wallet-scripts
 
 ## Exported API
 
+### Transaction Builder
+
+#### `TransactionTemplate`
+Fluent transaction builder that simplifies creating BSV transactions with a clean, chainable API.
+
+```typescript
+import { TransactionTemplate } from 'bsv-wallet-scripts';
+
+// Simple P2PKH transaction with metadata
+const result = await new TransactionTemplate(wallet, "Payment to Bob")
+  .addP2PKHOutput(bobPublicKey, 1000, "Payment")
+    .addOpReturn(['APP_ID', JSON.stringify({ memo: 'Thanks!' })])
+  .build();
+
+console.log(`Transaction created: ${result.txid}`);
+
+// Preview mode - see what will be sent without executing
+const preview = await new TransactionTemplate(wallet)
+  .addP2PKHOutput(alicePublicKey, 5000)
+  .build({ preview: true });
+
+console.log('Transaction preview:', preview);
+```
+
+**Features:**
+- Fluent API with method chaining
+- Support for P2PKH, Ordinal P2PKH, and custom outputs
+- **Automatic change outputs** with fee calculation
+- Per-output OP_RETURN metadata
+- Transaction-level options (randomizeOutputs, trustSelf, etc.)
+- Preview mode to inspect before execution
+- Input support for spending UTXOs
+
+📖 **[Complete Documentation](./docs/transaction-template.md)**
+
+**Example with automatic change:**
+```typescript
+// Change is automatically calculated: inputs - outputs - fees
+await new TransactionTemplate(wallet, "Payment with change")
+  .addP2PKHInput(sourceTransaction, 0, walletParams, "UTXO")
+  .addP2PKHOutput(recipientPublicKey, 5000, "Payment")
+  .addChangeOutput(walletParams, "Change") // Satoshis calculated automatically!
+  .build();
+```
+
 ### Script Templates
 
 #### `WalletP2PKH`

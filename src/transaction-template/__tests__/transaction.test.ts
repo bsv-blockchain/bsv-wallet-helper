@@ -819,6 +819,163 @@ describe('TransactionTemplate', () => {
   // Note: Tests with inputs are currently skipped because trustSelf option
   // doesn't work with mock wallets/transactions. These tests validate the API
   // but cannot execute with mock data that doesn't exist on-chain.
+  describe('addChangeOutput', () => {
+    test('should add a change output with public key string', async () => {
+      const privateKey = new PrivateKey(150);
+      const wallet = await makeWallet('test', storageURL, privateKey.toHex());
+      const publicKey = privateKey.toPublicKey().toString();
+
+      const template = new TransactionTemplate(wallet)
+        .addChangeOutput(publicKey, "Change output");
+
+      expect(template).toBeDefined();
+
+      // Verify internal configuration
+      const outputs = (template as any).parent.outputs;
+      expect(outputs).toHaveLength(1);
+      expect(outputs[0].type).toBe('change');
+      expect(outputs[0].description).toBe("Change output");
+      expect(outputs[0].addressOrParams).toBe(publicKey);
+      expect(outputs[0].satoshis).toBeUndefined(); // Calculated during signing
+    });
+
+    test('should add a change output with wallet derivation params', async () => {
+      const privateKey = new PrivateKey(151);
+      const wallet = await makeWallet('test', storageURL, privateKey.toHex());
+
+      const params = {
+        protocolID: [2, 'p2pkh'] as WalletProtocol,
+        keyID: '0',
+        counterparty: 'self' as WalletCounterparty,
+      };
+
+      const template = new TransactionTemplate(wallet)
+        .addChangeOutput(params, "Change output");
+
+      expect(template).toBeDefined();
+
+      // Verify internal configuration
+      const outputs = (template as any).parent.outputs;
+      expect(outputs).toHaveLength(1);
+      expect(outputs[0].type).toBe('change');
+      expect(outputs[0].description).toBe("Change output");
+      expect(outputs[0].addressOrParams).toEqual(params);
+      expect(outputs[0].satoshis).toBeUndefined();
+    });
+
+    test('should use default description when none provided', async () => {
+      const privateKey = new PrivateKey(152);
+      const wallet = await makeWallet('test', storageURL, privateKey.toHex());
+      const publicKey = privateKey.toPublicKey().toString();
+
+      const template = new TransactionTemplate(wallet)
+        .addChangeOutput(publicKey);
+
+      expect(template).toBeDefined();
+
+      // Verify internal configuration
+      const outputs = (template as any).parent.outputs;
+      expect(outputs).toHaveLength(1);
+      expect(outputs[0].type).toBe('change');
+      expect(outputs[0].description).toBe("Change");
+    });
+
+    test('should throw error when addressOrParams is missing', async () => {
+      const privateKey = new PrivateKey(153);
+      const wallet = await makeWallet('test', storageURL, privateKey.toHex());
+
+      expect(() => {
+        // @ts-ignore - intentionally testing invalid input
+        new TransactionTemplate(wallet).addChangeOutput(null);
+      }).toThrow('addressOrParams is required for change output');
+    });
+
+    test('should throw error when description is not a string', async () => {
+      const privateKey = new PrivateKey(154);
+      const wallet = await makeWallet('test', storageURL, privateKey.toHex());
+      const publicKey = privateKey.toPublicKey().toString();
+
+      expect(() => {
+        // @ts-ignore - intentionally testing invalid input
+        new TransactionTemplate(wallet).addChangeOutput(publicKey, 123);
+      }).toThrow('description must be a string');
+    });
+
+    test('should add OP_RETURN to change output', async () => {
+      const privateKey = new PrivateKey(155);
+      const wallet = await makeWallet('test', storageURL, privateKey.toHex());
+      const publicKey = privateKey.toPublicKey().toString();
+
+      const template = new TransactionTemplate(wallet)
+        .addChangeOutput(publicKey, "Change with metadata")
+          .addOpReturn(['change', 'metadata']);
+
+      expect(template).toBeDefined();
+
+      // Verify OP_RETURN is added to change output
+      const outputs = (template as any).parent.outputs;
+      expect(outputs).toHaveLength(1);
+      expect(outputs[0].type).toBe('change');
+      expect(outputs[0].opReturnFields).toEqual(['change', 'metadata']);
+    });
+
+    test('should throw error when change output has no inputs', async () => {
+      const privateKey = new PrivateKey(156);
+      const wallet = await makeWallet('test', storageURL, privateKey.toHex());
+      const publicKey = privateKey.toPublicKey().toString();
+
+      const template = new TransactionTemplate(wallet, "Change without inputs")
+        .addChangeOutput(publicKey);
+
+      await expect(template.build()).rejects.toThrow(
+        'Change outputs require at least one input'
+      );
+    });
+
+    test('should support multiple change outputs', async () => {
+      const privateKey = new PrivateKey(157);
+      const wallet = await makeWallet('test', storageURL, privateKey.toHex());
+      const publicKey = privateKey.toPublicKey().toString();
+
+      const template = new TransactionTemplate(wallet)
+        .addChangeOutput(publicKey, "First change")
+        .addChangeOutput(publicKey, "Second change");
+
+      expect(template).toBeDefined();
+
+      // Verify each change output is configured independently
+      const outputs = (template as any).parent.outputs;
+      expect(outputs).toHaveLength(2);
+      expect(outputs[0].type).toBe('change');
+      expect(outputs[0].description).toBe("First change");
+      expect(outputs[1].type).toBe('change');
+      expect(outputs[1].description).toBe("Second change");
+    });
+
+    test('should support mixing regular and change outputs', async () => {
+      const privateKey = new PrivateKey(158);
+      const wallet = await makeWallet('test', storageURL, privateKey.toHex());
+      const publicKey = privateKey.toPublicKey().toString();
+
+      const template = new TransactionTemplate(wallet)
+        .addP2PKHOutput(publicKey, 1000, "Regular output")
+        .addChangeOutput(publicKey, "Change output")
+        .addP2PKHOutput(publicKey, 2000, "Another regular");
+
+      expect(template).toBeDefined();
+
+      // Verify each output type is configured correctly
+      const outputs = (template as any).parent.outputs;
+      expect(outputs).toHaveLength(3);
+      expect(outputs[0].type).toBe('p2pkh');
+      expect(outputs[0].satoshis).toBe(1000);
+      expect(outputs[1].type).toBe('change');
+      expect(outputs[1].satoshis).toBeUndefined();
+      expect(outputs[2].type).toBe('p2pkh');
+      expect(outputs[2].satoshis).toBe(2000);
+    });
+  });
+
   describe.skip('transactions with inputs', () => {
     test('should create a transaction with P2PKH input and output', async () => {
       const privateKey = new PrivateKey(200);

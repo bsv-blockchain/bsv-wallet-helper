@@ -121,6 +121,13 @@ declare class OrdP2PKH implements ScriptTemplate {
 }
 
 /**
+ * Parameters for the build() method
+ */
+interface BuildParams {
+    /** If true, returns the createAction arguments without executing the transaction */
+    preview?: boolean;
+}
+/**
  * Configuration for a transaction input
  */
 type InputConfig = {
@@ -174,6 +181,12 @@ type OutputConfig = {
     satoshis: number;
     description?: string;
     lockingScript: LockingScript;
+    opReturnFields?: (string | number[])[];
+} | {
+    type: 'change';
+    satoshis?: number;
+    description?: string;
+    addressOrParams: string | WalletDerivationParams;
     opReturnFields?: (string | number[])[];
 };
 /**
@@ -243,6 +256,14 @@ declare class InputBuilder {
      */
     addP2PKHOutput(addressOrParams: string | WalletDerivationParams, satoshis: number, description?: string): OutputBuilder;
     /**
+     * Adds a change output that automatically calculates the change amount.
+     *
+     * @param addressOrParams - Public key hex or wallet derivation parameters
+     * @param description - Optional description for this output
+     * @returns A new OutputBuilder for the new output
+     */
+    addChangeOutput(addressOrParams: string | WalletDerivationParams, description?: string): OutputBuilder;
+    /**
      * Adds an ordinalP2PKH (1Sat Ordinal + P2PKH) output to the transaction.
      *
      * @param addressOrParams - Public key hex string or wallet derivation parameters
@@ -272,9 +293,10 @@ declare class InputBuilder {
     /**
      * Builds the transaction using wallet.createAction() (convenience proxy to TransactionTemplate).
      *
-     * @returns Promise resolving to txid and tx from wallet.createAction()
+     * @param params - Build parameters (optional)
+     * @returns Promise resolving to txid and tx from wallet.createAction(), or preview object if params.preview=true
      */
-    build(): Promise<CreateActionResult>;
+    build(params?: BuildParams): Promise<CreateActionResult | any>;
 }
 /**
  * Builder class for configuring individual transaction outputs.
@@ -303,6 +325,14 @@ declare class OutputBuilder {
      * @returns A new OutputBuilder for the new output
      */
     addP2PKHOutput(addressOrParams: string | WalletDerivationParams, satoshis: number, description?: string): OutputBuilder;
+    /**
+     * Adds a change output that automatically calculates the change amount.
+     *
+     * @param addressOrParams - Public key hex or wallet derivation parameters
+     * @param description - Optional description for this output
+     * @returns A new OutputBuilder for the new output
+     */
+    addChangeOutput(addressOrParams: string | WalletDerivationParams, description?: string): OutputBuilder;
     /**
      * Adds a P2PKH input to the transaction.
      *
@@ -380,9 +410,10 @@ declare class OutputBuilder {
     /**
      * Builds the transaction using wallet.createAction() (convenience proxy to TransactionTemplate).
      *
-     * @returns Promise resolving to txid and tx from wallet.createAction()
+     * @param params - Build parameters (optional)
+     * @returns Promise resolving to txid and tx from wallet.createAction(), or preview object if params.preview=true
      */
-    build(): Promise<CreateActionResult>;
+    build(params?: BuildParams): Promise<CreateActionResult | any>;
 }
 /**
  * TransactionTemplate - Builder class for creating BSV transactions with fluent API.
@@ -469,6 +500,16 @@ declare class TransactionTemplate {
      */
     addP2PKHOutput(addressOrParams: string | WalletDerivationParams, satoshis: number, description?: string): OutputBuilder;
     /**
+     * Adds a change output that automatically calculates the change amount during transaction signing.
+     *
+     * The satoshi amount is calculated as: inputs - outputs - fees
+     *
+     * @param addressOrParams - Public key hex string or wallet derivation parameters for receiving change
+     * @param description - Optional description for this output (default: "Change")
+     * @returns An OutputBuilder for configuring this output (e.g., adding OP_RETURN)
+     */
+    addChangeOutput(addressOrParams: string | WalletDerivationParams, description?: string): OutputBuilder;
+    /**
      * Adds an ordinalP2PKH (1Sat Ordinal + P2PKH) output to the transaction.
      *
      * @param addressOrParams - Public key hex string or wallet derivation parameters (protocolID, keyID, counterparty)
@@ -498,10 +539,11 @@ declare class TransactionTemplate {
      * where specified, calls wallet.createAction() with all outputs and options, and
      * returns the transaction ID and transaction object.
      *
-     * @returns Promise resolving to txid and tx from wallet.createAction()
+     * @param params - Build parameters (optional). Use { preview: true } to return the createAction arguments without executing
+     * @returns Promise resolving to txid and tx from wallet.createAction(), or preview object if params.preview=true
      * @throws Error if no outputs are configured or if locking script creation fails
      */
-    build(): Promise<CreateActionResult>;
+    build(params?: BuildParams): Promise<CreateActionResult | any>;
 }
 
 /**
@@ -541,4 +583,4 @@ declare function calculatePreimage(tx: Transaction, inputIndex: number, signOutp
  */
 declare const addOpReturnData: (script: LockingScript, fields: (string | number[])[]) => LockingScript;
 
-export { InputBuilder, type Inscription, type MAP, OutputBuilder, TransactionTemplate, type WalletDerivationParams, OrdP2PKH as WalletOrdP2PKH, P2PKH as WalletP2PKH, addOpReturnData, calculatePreimage, makeWallet };
+export { type BuildParams, InputBuilder, type Inscription, type MAP, OutputBuilder, TransactionTemplate, type WalletDerivationParams, OrdP2PKH as WalletOrdP2PKH, P2PKH as WalletP2PKH, addOpReturnData, calculatePreimage, makeWallet };

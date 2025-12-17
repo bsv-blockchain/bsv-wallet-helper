@@ -97,6 +97,13 @@ type OutputConfig =
         description?: string;
         lockingScript: LockingScript;
         opReturnFields?: (string | number[])[];
+    }
+    | {
+        type: 'change';
+        satoshis?: number; // Calculated during signing, optional for config
+        description?: string;
+        addressOrParams: string | WalletDerivationParams;
+        opReturnFields?: (string | number[])[];
     };
 
 /**
@@ -241,6 +248,20 @@ export class InputBuilder {
     }
 
     /**
+     * Adds a change output that automatically calculates the change amount.
+     *
+     * @param addressOrParams - Public key hex or wallet derivation parameters
+     * @param description - Optional description for this output
+     * @returns A new OutputBuilder for the new output
+     */
+    addChangeOutput(
+        addressOrParams: string | WalletDerivationParams,
+        description?: string
+    ): OutputBuilder {
+        return this.parent.addChangeOutput(addressOrParams, description);
+    }
+
+    /**
      * Adds an ordinalP2PKH (1Sat Ordinal + P2PKH) output to the transaction.
      *
      * @param addressOrParams - Public key hex string or wallet derivation parameters
@@ -342,6 +363,20 @@ export class OutputBuilder {
             satoshis,
             description
         );
+    }
+
+    /**
+     * Adds a change output that automatically calculates the change amount.
+     *
+     * @param addressOrParams - Public key hex or wallet derivation parameters
+     * @param description - Optional description for this output
+     * @returns A new OutputBuilder for the new output
+     */
+    addChangeOutput(
+        addressOrParams: string | WalletDerivationParams,
+        description?: string
+    ): OutputBuilder {
+        return this.parent.addChangeOutput(addressOrParams, description);
     }
 
     /**
@@ -815,6 +850,37 @@ export class TransactionTemplate {
     }
 
     /**
+     * Adds a change output that automatically calculates the change amount during transaction signing.
+     *
+     * The satoshi amount is calculated as: inputs - outputs - fees
+     *
+     * @param addressOrParams - Public key hex string or wallet derivation parameters for receiving change
+     * @param description - Optional description for this output (default: "Change")
+     * @returns An OutputBuilder for configuring this output (e.g., adding OP_RETURN)
+     */
+    addChangeOutput(
+        addressOrParams: string | WalletDerivationParams,
+        description?: string
+    ): OutputBuilder {
+        // Validate parameters
+        if (!addressOrParams) {
+            throw new Error('addressOrParams is required for change output');
+        }
+        if (description !== undefined && typeof description !== 'string') {
+            throw new Error('description must be a string');
+        }
+
+        const outputConfig: OutputConfig = {
+            type: 'change',
+            description: description || "Change",
+            addressOrParams,
+        };
+
+        this.outputs.push(outputConfig);
+        return new OutputBuilder(this, outputConfig);
+    }
+
+    /**
      * Adds an ordinalP2PKH (1Sat Ordinal + P2PKH) output to the transaction.
      *
      * @param addressOrParams - Public key hex string or wallet derivation parameters (protocolID, keyID, counterparty)
@@ -908,6 +974,12 @@ export class TransactionTemplate {
         // Validate that we have outputs
         if (this.outputs.length === 0) {
             throw new Error('At least one output is required to build a transaction');
+        }
+
+        // Validate that change outputs require inputs
+        const hasChangeOutputs = this.outputs.some(output => output.type === 'change');
+        if (hasChangeOutputs && this.inputs.length === 0) {
+            throw new Error('Change outputs require at least one input');
         }
 
         // Build the inputs array for wallet.createAction()
@@ -1020,6 +1092,17 @@ export class TransactionTemplate {
                     lockingScript = config.lockingScript;
                     break;
                 }
+                case 'change': {
+                    // Change output - create locking script like P2PKH
+                    const p2pkh = new P2PKH(this.wallet);
+                    const addressOrParams = config.addressOrParams;
+                    if (isDerivationParams(addressOrParams)) {
+                        lockingScript = await p2pkh.lock(addressOrParams);
+                    } else {
+                        lockingScript = await p2pkh.lock(addressOrParams);
+                    }
+                    break;
+                }
                 default: {
                     throw new Error(`Unsupported output type: ${(config as any).type}`);
                 }
@@ -1030,22 +1113,40 @@ export class TransactionTemplate {
                 lockingScript = addOpReturnData(lockingScript, config.opReturnFields);
             }
 
-            // Add to outputs array
-            const output: CreateActionOutput = {
-                lockingScript: lockingScript.toHex(),
-                satoshis: config.satoshis,
-                outputDescription: config.description || "Transaction output",
-            };
+            // Handle change outputs specially - mark for auto-calculation during signing
+            if (config.type === 'change') {
+                // Build the output object for signing with change flag
+                const outputForSigning: any = {
+                    lockingScript: lockingScript,
+                    change: true  // Mark as change output for auto-calculation
+                }
 
-            // Build the output object for signing
-            const outputForSigning = {
-                lockingScript: lockingScript,
-                satoshis: config.satoshis,
+                signingOutputs.push(outputForSigning);
+
+                // Add placeholder to actionOutputs - satoshis will be updated after signing
+                const output: CreateActionOutput = {
+                    lockingScript: lockingScript.toHex(),
+                    satoshis: 0,  // Placeholder - will be updated after signing
+                    outputDescription: config.description || "Change",
+                };
+                actionOutputs.push(output);
+            } else {
+                // Regular output - add to both signing and action outputs
+                const output: CreateActionOutput = {
+                    lockingScript: lockingScript.toHex(),
+                    satoshis: config.satoshis!,  // Non-change outputs must have satoshis
+                    outputDescription: config.description || "Transaction output",
+                };
+
+                // Build the output object for signing
+                const outputForSigning = {
+                    lockingScript: lockingScript,
+                    satoshis: config.satoshis!,
+                }
+
+                signingOutputs.push(outputForSigning);
+                actionOutputs.push(output);
             }
-
-            signingOutputs.push(outputForSigning);
-
-            actionOutputs.push(output);
         }
 
         // Build options for createAction
@@ -1065,10 +1166,19 @@ export class TransactionTemplate {
                 tx.addInput(input)
             });
             signingOutputs.forEach((output) => {
-                tx.addOutput({
-                    satoshis: output.satoshis,
-                    lockingScript: output.lockingScript,
-                })
+                if (output.change) {
+                    // Change output - don't specify satoshis, will be calculated
+                    tx.addOutput({
+                        lockingScript: output.lockingScript,
+                        change: true
+                    })
+                } else {
+                    // Regular output with specified satoshis
+                    tx.addOutput({
+                        satoshis: output.satoshis,
+                        lockingScript: output.lockingScript,
+                    })
+                }
             });
 
             // Calculate fee and sign
@@ -1089,6 +1199,28 @@ export class TransactionTemplate {
                     inputDescription: config.inputDescription,
                     unlockingScript: signedInput.unlockingScript.toHex(),
                 });
+            }
+
+            // Update change output satoshis from signed transaction
+            for (let i = 0; i < this.outputs.length; i++) {
+                const config = this.outputs[i];
+
+                if (config.type === 'change') {
+                    // Find the corresponding output in the signed transaction
+                    const signedOutput = tx.outputs[i];
+
+                    if (!signedOutput) {
+                        throw new Error(`Change output at index ${i} not found in signed transaction`);
+                    }
+
+                    // Validate that satoshis were calculated
+                    if (signedOutput.satoshis === undefined) {
+                        throw new Error(`Change output at index ${i} has no satoshis after fee calculation`);
+                    }
+
+                    // Update the placeholder satoshis with calculated value
+                    actionOutputs[i].satoshis = signedOutput.satoshis;
+                }
             }
 
             // Get all the inputBEEFs needed for createAction and merge them

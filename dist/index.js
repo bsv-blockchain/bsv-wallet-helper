@@ -514,6 +514,16 @@ var InputBuilder = class {
     return this.parent.addP2PKHOutput(addressOrParams, satoshis, description);
   }
   /**
+   * Adds a change output that automatically calculates the change amount.
+   *
+   * @param addressOrParams - Public key hex or wallet derivation parameters
+   * @param description - Optional description for this output
+   * @returns A new OutputBuilder for the new output
+   */
+  addChangeOutput(addressOrParams, description) {
+    return this.parent.addChangeOutput(addressOrParams, description);
+  }
+  /**
    * Adds an ordinalP2PKH (1Sat Ordinal + P2PKH) output to the transaction.
    *
    * @param addressOrParams - Public key hex string or wallet derivation parameters
@@ -549,10 +559,11 @@ var InputBuilder = class {
   /**
    * Builds the transaction using wallet.createAction() (convenience proxy to TransactionTemplate).
    *
-   * @returns Promise resolving to txid and tx from wallet.createAction()
+   * @param params - Build parameters (optional)
+   * @returns Promise resolving to txid and tx from wallet.createAction(), or preview object if params.preview=true
    */
-  async build() {
-    return this.parent.build();
+  async build(params) {
+    return this.parent.build(params);
   }
 };
 var OutputBuilder = class {
@@ -587,6 +598,16 @@ var OutputBuilder = class {
       satoshis,
       description
     );
+  }
+  /**
+   * Adds a change output that automatically calculates the change amount.
+   *
+   * @param addressOrParams - Public key hex or wallet derivation parameters
+   * @param description - Optional description for this output
+   * @returns A new OutputBuilder for the new output
+   */
+  addChangeOutput(addressOrParams, description) {
+    return this.parent.addChangeOutput(addressOrParams, description);
   }
   /**
    * Adds a P2PKH input to the transaction.
@@ -718,10 +739,11 @@ var OutputBuilder = class {
   /**
    * Builds the transaction using wallet.createAction() (convenience proxy to TransactionTemplate).
    *
-   * @returns Promise resolving to txid and tx from wallet.createAction()
+   * @param params - Build parameters (optional)
+   * @returns Promise resolving to txid and tx from wallet.createAction(), or preview object if params.preview=true
    */
-  async build() {
-    return this.parent.build();
+  async build(params) {
+    return this.parent.build(params);
   }
 };
 var TransactionTemplate = class {
@@ -947,6 +969,30 @@ var TransactionTemplate = class {
     return new OutputBuilder(this, outputConfig);
   }
   /**
+   * Adds a change output that automatically calculates the change amount during transaction signing.
+   *
+   * The satoshi amount is calculated as: inputs - outputs - fees
+   *
+   * @param addressOrParams - Public key hex string or wallet derivation parameters for receiving change
+   * @param description - Optional description for this output (default: "Change")
+   * @returns An OutputBuilder for configuring this output (e.g., adding OP_RETURN)
+   */
+  addChangeOutput(addressOrParams, description) {
+    if (!addressOrParams) {
+      throw new Error("addressOrParams is required for change output");
+    }
+    if (description !== void 0 && typeof description !== "string") {
+      throw new Error("description must be a string");
+    }
+    const outputConfig = {
+      type: "change",
+      description: description || "Change",
+      addressOrParams
+    };
+    this.outputs.push(outputConfig);
+    return new OutputBuilder(this, outputConfig);
+  }
+  /**
    * Adds an ordinalP2PKH (1Sat Ordinal + P2PKH) output to the transaction.
    *
    * @param addressOrParams - Public key hex string or wallet derivation parameters (protocolID, keyID, counterparty)
@@ -1014,12 +1060,17 @@ var TransactionTemplate = class {
    * where specified, calls wallet.createAction() with all outputs and options, and
    * returns the transaction ID and transaction object.
    *
-   * @returns Promise resolving to txid and tx from wallet.createAction()
+   * @param params - Build parameters (optional). Use { preview: true } to return the createAction arguments without executing
+   * @returns Promise resolving to txid and tx from wallet.createAction(), or preview object if params.preview=true
    * @throws Error if no outputs are configured or if locking script creation fails
    */
-  async build() {
+  async build(params) {
     if (this.outputs.length === 0) {
       throw new Error("At least one output is required to build a transaction");
+    }
+    const hasChangeOutputs = this.outputs.some((output) => output.type === "change");
+    if (hasChangeOutputs && this.inputs.length === 0) {
+      throw new Error("Change outputs require at least one input");
     }
     const actionInputsConfig = [];
     const signingInputs = [];
@@ -1095,6 +1146,16 @@ var TransactionTemplate = class {
           lockingScript = config.lockingScript;
           break;
         }
+        case "change": {
+          const p2pkh = new P2PKH(this.wallet);
+          const addressOrParams = config.addressOrParams;
+          if (isDerivationParams(addressOrParams)) {
+            lockingScript = await p2pkh.lock(addressOrParams);
+          } else {
+            lockingScript = await p2pkh.lock(addressOrParams);
+          }
+          break;
+        }
         default: {
           throw new Error(`Unsupported output type: ${config.type}`);
         }
@@ -1102,17 +1163,34 @@ var TransactionTemplate = class {
       if (config.opReturnFields && config.opReturnFields.length > 0) {
         lockingScript = addOpReturnData(lockingScript, config.opReturnFields);
       }
-      const output = {
-        lockingScript: lockingScript.toHex(),
-        satoshis: config.satoshis,
-        outputDescription: config.description || "Transaction output"
-      };
-      const outputForSigning = {
-        lockingScript,
-        satoshis: config.satoshis
-      };
-      signingOutputs.push(outputForSigning);
-      actionOutputs.push(output);
+      if (config.type === "change") {
+        const outputForSigning = {
+          lockingScript,
+          change: true
+          // Mark as change output for auto-calculation
+        };
+        signingOutputs.push(outputForSigning);
+        const output = {
+          lockingScript: lockingScript.toHex(),
+          satoshis: 0,
+          // Placeholder - will be updated after signing
+          outputDescription: config.description || "Change"
+        };
+        actionOutputs.push(output);
+      } else {
+        const output = {
+          lockingScript: lockingScript.toHex(),
+          satoshis: config.satoshis,
+          // Non-change outputs must have satoshis
+          outputDescription: config.description || "Transaction output"
+        };
+        const outputForSigning = {
+          lockingScript,
+          satoshis: config.satoshis
+        };
+        signingOutputs.push(outputForSigning);
+        actionOutputs.push(output);
+      }
     }
     const createActionOptions = {
       ...this.transactionOptions
@@ -1125,10 +1203,17 @@ var TransactionTemplate = class {
         tx.addInput(input);
       });
       signingOutputs.forEach((output) => {
-        tx.addOutput({
-          satoshis: output.satoshis,
-          lockingScript: output.lockingScript
-        });
+        if (output.change) {
+          tx.addOutput({
+            lockingScript: output.lockingScript,
+            change: true
+          });
+        } else {
+          tx.addOutput({
+            satoshis: output.satoshis,
+            lockingScript: output.lockingScript
+          });
+        }
       });
       await tx.fee(new import_sdk5.SatoshisPerKilobyte(DEFAULT_SAT_PER_KB));
       await tx.sign();
@@ -1144,6 +1229,19 @@ var TransactionTemplate = class {
           unlockingScript: signedInput.unlockingScript.toHex()
         });
       }
+      for (let i = 0; i < this.outputs.length; i++) {
+        const config = this.outputs[i];
+        if (config.type === "change") {
+          const signedOutput = tx.outputs[i];
+          if (!signedOutput) {
+            throw new Error(`Change output at index ${i} not found in signed transaction`);
+          }
+          if (signedOutput.satoshis === void 0) {
+            throw new Error(`Change output at index ${i} has no satoshis after fee calculation`);
+          }
+          actionOutputs[i].satoshis = signedOutput.satoshis;
+        }
+      }
       if (signingInputs.length === 1) {
         inputBEEF = signingInputs[0].sourceTransaction.toBEEF();
       } else {
@@ -1155,13 +1253,17 @@ var TransactionTemplate = class {
         inputBEEF = mergedBeef.toBinary();
       }
     }
-    const result = await this.wallet.createAction({
+    const createActionArgs = {
       description: this._transactionDescription || "Transaction",
       ...inputBEEF && { inputBEEF },
       ...actionInputs.length > 0 && { inputs: actionInputs },
       outputs: actionOutputs,
       options: createActionOptions
-    });
+    };
+    if (params?.preview) {
+      return createActionArgs;
+    }
+    const result = await this.wallet.createAction(createActionArgs);
     return {
       txid: result.txid,
       tx: result.tx
