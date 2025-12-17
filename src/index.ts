@@ -12,7 +12,7 @@ export {
   OutputBuilder,
   InputBuilder,
   type BuildParams
-} from './transaction-template/transaction.js'
+} from './transaction-template/index.js'
 
 // Types
 export { type WalletDerivationParams } from './types/index.js'
