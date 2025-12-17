@@ -20,6 +20,9 @@ var __toCommonJS = (mod) => __copyProps(__defProp({}, "__esModule", { value: tru
 // src/index.ts
 var index_exports = {};
 __export(index_exports, {
+  InputBuilder: () => InputBuilder,
+  OutputBuilder: () => OutputBuilder,
+  TransactionTemplate: () => TransactionTemplate,
   WalletOrdP2PKH: () => OrdP2PKH,
   WalletP2PKH: () => P2PKH,
   addOpReturnData: () => addOpReturnData,
@@ -242,6 +245,7 @@ var import_sdk3 = require("@bsv/sdk");
 
 // src/utils/constants.ts
 var ORDINAL_MAP_PREFIX = "1PuQa7K62MiKCtssSLKy1kh56WWU7MtUR5";
+var DEFAULT_SAT_PER_KB = 100;
 
 // src/script-templates/ordinal.ts
 var toHex = (str) => {
@@ -345,42 +349,11 @@ var applyInscription = (lockingScript, inscription, metaData, withSeparator = fa
   return import_sdk3.LockingScript.fromASM(inscriptionAsm);
 };
 
-// src/utils/mockWallet.ts
-var import_sdk4 = require("@bsv/sdk");
-var import_wallet_toolbox_client = require("@bsv/wallet-toolbox-client");
-async function makeWallet(chain, storageURL, privateKey) {
-  if (!chain) {
-    throw new Error('chain parameter is required (must be "test" or "main")');
-  }
-  if (chain !== "test" && chain !== "main") {
-    throw new Error(`Invalid chain "${chain}". Must be "test" or "main"`);
-  }
-  if (!storageURL) {
-    throw new Error("storageURL parameter is required");
-  }
-  if (!privateKey) {
-    throw new Error("privateKey parameter is required");
-  }
-  try {
-    const keyDeriver = new import_sdk4.KeyDeriver(new import_sdk4.PrivateKey(privateKey, "hex"));
-    const storageManager = new import_wallet_toolbox_client.WalletStorageManager(keyDeriver.identityKey);
-    const signer = new import_wallet_toolbox_client.WalletSigner(chain, keyDeriver, storageManager);
-    const services = new import_wallet_toolbox_client.Services(chain);
-    const wallet = new import_wallet_toolbox_client.Wallet(signer, services);
-    const client = new import_wallet_toolbox_client.StorageClient(wallet, storageURL);
-    await client.makeAvailable();
-    await storageManager.addWalletStorageProvider(client);
-    return wallet;
-  } catch (error) {
-    if (error instanceof Error) {
-      throw new Error(`Failed to create wallet: ${error.message}`);
-    }
-    throw new Error("Failed to create wallet: Unknown error");
-  }
-}
+// src/transaction-template/transaction.ts
+var import_sdk5 = require("@bsv/sdk");
 
 // src/utils/opreturn.ts
-var import_sdk5 = require("@bsv/sdk");
+var import_sdk4 = require("@bsv/sdk");
 var isHex = (str) => {
   if (str.length === 0) return true;
   if (str.length % 2 !== 0) return false;
@@ -388,12 +361,12 @@ var isHex = (str) => {
 };
 var toHexField = (field) => {
   if (Array.isArray(field)) {
-    return import_sdk5.Utils.toHex(field);
+    return import_sdk4.Utils.toHex(field);
   }
   if (isHex(field)) {
     return field.toLowerCase();
   }
-  return import_sdk5.Utils.toHex(import_sdk5.Utils.toArray(field));
+  return import_sdk4.Utils.toHex(import_sdk4.Utils.toArray(field));
 };
 var addOpReturnData = (script, fields) => {
   if (!script || typeof script.toASM !== "function") {
@@ -433,10 +406,807 @@ var addOpReturnData = (script, fields) => {
   const baseAsm = script.toASM();
   const dataFieldsAsm = hexFields.join(" ");
   const fullAsm = `${baseAsm} OP_RETURN ${dataFieldsAsm}`;
-  return import_sdk5.LockingScript.fromASM(fullAsm);
+  return import_sdk4.LockingScript.fromASM(fullAsm);
 };
+
+// src/transaction-template/transaction.ts
+function isDerivationParams(value) {
+  return typeof value === "object" && value !== null && !Array.isArray(value);
+}
+var InputBuilder = class {
+  constructor(parent, inputConfig) {
+    this.parent = parent;
+    this.inputConfig = inputConfig;
+  }
+  /**
+   * Sets the description for THIS input only.
+   *
+   * @param desc - Description for this specific input
+   * @returns This InputBuilder for further input configuration
+   */
+  inputDescription(desc) {
+    if (typeof desc !== "string") {
+      throw new Error("Input description must be a string");
+    }
+    this.inputConfig.description = desc;
+    return this;
+  }
+  /**
+   * Adds a P2PKH input to the transaction.
+   *
+   * @param sourceTransaction - The source transaction containing the output to spend
+   * @param sourceOutputIndex - The index of the output in the source transaction
+   * @param walletParams - Optional wallet derivation parameters
+   * @param description - Optional description for this input
+   * @param signOutputs - Signature scope: 'all', 'none', or 'single' (default: 'all')
+   * @param anyoneCanPay - Allow other inputs to be added later (default: false)
+   * @param sourceSatoshis - Optional amount in satoshis
+   * @param lockingScript - Optional locking script
+   * @returns A new InputBuilder for the new input
+   */
+  addP2PKHInput(sourceTransaction, sourceOutputIndex, walletParams, description, signOutputs = "all", anyoneCanPay = false, sourceSatoshis, lockingScript) {
+    return this.parent.addP2PKHInput(
+      sourceTransaction,
+      sourceOutputIndex,
+      walletParams,
+      description,
+      signOutputs,
+      anyoneCanPay,
+      sourceSatoshis,
+      lockingScript
+    );
+  }
+  /**
+   * Adds an ordinalP2PKH input to the transaction.
+   *
+   * @param sourceTransaction - The source transaction containing the output to spend
+   * @param sourceOutputIndex - The index of the output in the source transaction
+   * @param walletParams - Optional wallet derivation parameters
+   * @param description - Optional description for this input
+   * @param signOutputs - Signature scope: 'all', 'none', or 'single' (default: 'all')
+   * @param anyoneCanPay - Allow other inputs to be added later (default: false)
+   * @param sourceSatoshis - Optional amount in satoshis
+   * @param lockingScript - Optional locking script
+   * @returns A new InputBuilder for the new input
+   */
+  addOrdinalP2PKHInput(sourceTransaction, sourceOutputIndex, walletParams, description, signOutputs = "all", anyoneCanPay = false, sourceSatoshis, lockingScript) {
+    return this.parent.addOrdinalP2PKHInput(
+      sourceTransaction,
+      sourceOutputIndex,
+      walletParams,
+      description,
+      signOutputs,
+      anyoneCanPay,
+      sourceSatoshis,
+      lockingScript
+    );
+  }
+  /**
+   * Adds a custom input with a pre-built unlocking script template.
+   *
+   * @param unlockingScriptTemplate - The unlocking script template for this input
+   * @param sourceTransaction - The source transaction containing the output to spend
+   * @param sourceOutputIndex - The index of the output in the source transaction
+   * @param description - Optional description for this input
+   * @param sourceSatoshis - Optional amount in satoshis
+   * @param lockingScript - Optional locking script
+   * @returns A new InputBuilder for the new input
+   */
+  addCustomInput(unlockingScriptTemplate, sourceTransaction, sourceOutputIndex, description, sourceSatoshis, lockingScript) {
+    return this.parent.addCustomInput(
+      unlockingScriptTemplate,
+      sourceTransaction,
+      sourceOutputIndex,
+      description,
+      sourceSatoshis,
+      lockingScript
+    );
+  }
+  /**
+   * Adds a P2PKH output to the transaction.
+   *
+   * @param addressOrParams - Public key hex string or wallet derivation parameters
+   * @param satoshis - Amount in satoshis for this output
+   * @param description - Optional description for this output
+   * @returns A new OutputBuilder for the new output
+   */
+  addP2PKHOutput(addressOrParams, satoshis, description) {
+    return this.parent.addP2PKHOutput(addressOrParams, satoshis, description);
+  }
+  /**
+   * Adds an ordinalP2PKH (1Sat Ordinal + P2PKH) output to the transaction.
+   *
+   * @param addressOrParams - Public key hex string or wallet derivation parameters
+   * @param satoshis - Amount in satoshis for this output (typically 1 for ordinals)
+   * @param inscription - Optional inscription data (dataB64, contentType)
+   * @param metadata - Optional MAP metadata (app, type, and custom properties)
+   * @param description - Optional description for this output
+   * @returns A new OutputBuilder for the new output
+   */
+  addOrdinalP2PKHOutput(addressOrParams, satoshis, inscription, metadata, description) {
+    return this.parent.addOrdinalP2PKHOutput(addressOrParams, satoshis, inscription, metadata, description);
+  }
+  /**
+   * Adds a custom output with a pre-built locking script.
+   *
+   * @param lockingScript - The locking script for this output
+   * @param satoshis - Amount in satoshis for this output
+   * @param description - Optional description for this output
+   * @returns A new OutputBuilder for the new output
+   */
+  addCustomOutput(lockingScript, satoshis, description) {
+    return this.parent.addCustomOutput(lockingScript, satoshis, description);
+  }
+  /**
+   * Sets transaction-level options (convenience proxy to TransactionTemplate).
+   *
+   * @param opts - Transaction options (randomizeOutputs, etc.)
+   * @returns The parent TransactionTemplate for transaction-level chaining
+   */
+  options(opts) {
+    return this.parent.options(opts);
+  }
+  /**
+   * Builds the transaction using wallet.createAction() (convenience proxy to TransactionTemplate).
+   *
+   * @returns Promise resolving to txid and tx from wallet.createAction()
+   */
+  async build() {
+    return this.parent.build();
+  }
+};
+var OutputBuilder = class {
+  constructor(parent, outputConfig) {
+    this.parent = parent;
+    this.outputConfig = outputConfig;
+  }
+  /**
+   * Adds OP_RETURN data to THIS output only.
+   *
+   * @param fields - Array of data fields. Each field can be a UTF-8 string, hex string, or byte array
+   * @returns This OutputBuilder for further output configuration
+   */
+  addOpReturn(fields) {
+    if (!Array.isArray(fields) || fields.length === 0) {
+      throw new Error("addOpReturn requires a non-empty array of fields");
+    }
+    this.outputConfig.opReturnFields = fields;
+    return this;
+  }
+  /**
+   * Adds a P2PKH output to the transaction.
+   *
+   * @param addressOrParams - Public key hex string or wallet derivation parameters
+   * @param satoshis - Amount in satoshis for this output
+   * @param description - Optional description for this output
+   * @returns A new OutputBuilder for the new output
+   */
+  addP2PKHOutput(addressOrParams, satoshis, description) {
+    return this.parent.addP2PKHOutput(
+      addressOrParams,
+      satoshis,
+      description
+    );
+  }
+  /**
+   * Adds a P2PKH input to the transaction.
+   *
+   * @param sourceTransaction - The source transaction containing the output to spend
+   * @param sourceOutputIndex - The index of the output in the source transaction
+   * @param walletParams - Optional wallet derivation parameters (defaults to [2, 'p2pkh'], '0', 'self')
+   * @param description - Optional description for this input
+   * @param signOutputs - Signature scope: 'all', 'none', or 'single' (default: 'all')
+   * @param anyoneCanPay - Allow other inputs to be added later (default: false)
+   * @param sourceSatoshis - Optional amount in satoshis (otherwise requires sourceTransaction)
+   * @param lockingScript - Optional locking script (otherwise requires sourceTransaction)
+   * @returns A new InputBuilder for the new input
+   */
+  addP2PKHInput(sourceTransaction, sourceOutputIndex, walletParams, description, signOutputs = "all", anyoneCanPay = false, sourceSatoshis, lockingScript) {
+    return this.parent.addP2PKHInput(
+      sourceTransaction,
+      sourceOutputIndex,
+      walletParams,
+      description,
+      signOutputs,
+      anyoneCanPay,
+      sourceSatoshis,
+      lockingScript
+    );
+  }
+  /**
+   * Adds an ordinalP2PKH input to the transaction.
+   *
+   * @param sourceTransaction - The source transaction containing the output to spend
+   * @param sourceOutputIndex - The index of the output in the source transaction
+   * @param walletParams - Optional wallet derivation parameters (defaults to [2, 'p2pkh'], '0', 'self')
+   * @param description - Optional description for this input
+   * @param signOutputs - Signature scope: 'all', 'none', or 'single' (default: 'all')
+   * @param anyoneCanPay - Allow other inputs to be added later (default: false)
+   * @param sourceSatoshis - Optional amount in satoshis (otherwise requires sourceTransaction)
+   * @param lockingScript - Optional locking script (otherwise requires sourceTransaction)
+   * @returns A new InputBuilder for the new input
+   */
+  addOrdinalP2PKHInput(sourceTransaction, sourceOutputIndex, walletParams, description, signOutputs = "all", anyoneCanPay = false, sourceSatoshis, lockingScript) {
+    return this.parent.addOrdinalP2PKHInput(
+      sourceTransaction,
+      sourceOutputIndex,
+      walletParams,
+      description,
+      signOutputs,
+      anyoneCanPay,
+      sourceSatoshis,
+      lockingScript
+    );
+  }
+  /**
+   * Adds a custom input with a pre-built unlocking script template.
+   *
+   * @param unlockingScriptTemplate - The unlocking script template for this input
+   * @param sourceTransaction - The source transaction containing the output to spend
+   * @param sourceOutputIndex - The index of the output in the source transaction
+   * @param description - Optional description for this input
+   * @param sourceSatoshis - Optional amount in satoshis
+   * @param lockingScript - Optional locking script
+   * @returns A new InputBuilder for the new input
+   */
+  addCustomInput(unlockingScriptTemplate, sourceTransaction, sourceOutputIndex, description, sourceSatoshis, lockingScript) {
+    return this.parent.addCustomInput(
+      unlockingScriptTemplate,
+      sourceTransaction,
+      sourceOutputIndex,
+      description,
+      sourceSatoshis,
+      lockingScript
+    );
+  }
+  /**
+   * Adds an ordinalP2PKH (1Sat Ordinal + P2PKH) output to the transaction.
+   *
+   * @param addressOrParams - Public key hex string or wallet derivation parameters
+   * @param satoshis - Amount in satoshis for this output (typically 1 for ordinals)
+   * @param inscription - Optional inscription data (dataB64, contentType)
+   * @param metadata - Optional MAP metadata (app, type, and custom properties)
+   * @param description - Optional description for this output
+   * @returns A new OutputBuilder for the new output
+   */
+  addOrdinalP2PKHOutput(addressOrParams, satoshis, inscription, metadata, description) {
+    return this.parent.addOrdinalP2PKHOutput(
+      addressOrParams,
+      satoshis,
+      inscription,
+      metadata,
+      description
+    );
+  }
+  /**
+   * Adds a custom output with a pre-built locking script.
+   *
+   * @param lockingScript - The locking script for this output
+   * @param satoshis - Amount in satoshis for this output
+   * @param description - Optional description for this output
+   * @returns A new OutputBuilder for the new output
+   */
+  addCustomOutput(lockingScript, satoshis, description) {
+    return this.parent.addCustomOutput(
+      lockingScript,
+      satoshis,
+      description
+    );
+  }
+  /**
+   * Sets the description for THIS output only.
+   *
+   * @param desc - Description for this specific output
+   * @returns This OutputBuilder for further output configuration
+   */
+  outputDescription(desc) {
+    if (typeof desc !== "string") {
+      throw new Error("Output description must be a string");
+    }
+    this.outputConfig.description = desc;
+    return this;
+  }
+  /**
+   * Sets transaction-level options (convenience proxy to TransactionTemplate).
+   *
+   * @param opts - Transaction options (randomizeOutputs, etc.)
+   * @returns The parent TransactionTemplate for transaction-level chaining
+   */
+  options(opts) {
+    return this.parent.options(opts);
+  }
+  /**
+   * Builds the transaction using wallet.createAction() (convenience proxy to TransactionTemplate).
+   *
+   * @returns Promise resolving to txid and tx from wallet.createAction()
+   */
+  async build() {
+    return this.parent.build();
+  }
+};
+var TransactionTemplate = class {
+  /**
+   * Creates a new TransactionTemplate builder.
+   *
+   * @param wallet - BRC-100 compatible wallet interface for signing and key derivation
+   * @param description - Optional description for the entire transaction
+   */
+  constructor(wallet, description) {
+    this.inputs = [];
+    this.outputs = [];
+    this.transactionOptions = {};
+    if (!wallet) {
+      throw new Error("Wallet is required for TransactionTemplate");
+    }
+    this.wallet = wallet;
+    this._transactionDescription = description;
+  }
+  /**
+   * Sets the transaction-level description.
+   *
+   * @param desc - Description for the entire transaction
+   * @returns This TransactionTemplate for further chaining
+   */
+  transactionDescription(desc) {
+    if (typeof desc !== "string") {
+      throw new Error("Description must be a string");
+    }
+    this._transactionDescription = desc;
+    return this;
+  }
+  /**
+   * Sets transaction-level options.
+   *
+   * @param opts - Transaction options (randomizeOutputs, trustSelf, signAndProcess, etc.)
+   * @returns This TransactionTemplate for further chaining
+   */
+  options(opts) {
+    if (!opts || typeof opts !== "object") {
+      throw new Error("Options must be an object");
+    }
+    if (opts.signAndProcess !== void 0 && typeof opts.signAndProcess !== "boolean") {
+      throw new Error("signAndProcess must be a boolean");
+    }
+    if (opts.acceptDelayedBroadcast !== void 0 && typeof opts.acceptDelayedBroadcast !== "boolean") {
+      throw new Error("acceptDelayedBroadcast must be a boolean");
+    }
+    if (opts.returnTXIDOnly !== void 0 && typeof opts.returnTXIDOnly !== "boolean") {
+      throw new Error("returnTXIDOnly must be a boolean");
+    }
+    if (opts.noSend !== void 0 && typeof opts.noSend !== "boolean") {
+      throw new Error("noSend must be a boolean");
+    }
+    if (opts.randomizeOutputs !== void 0 && typeof opts.randomizeOutputs !== "boolean") {
+      throw new Error("randomizeOutputs must be a boolean");
+    }
+    if (opts.trustSelf !== void 0) {
+      const validTrustSelfValues = ["known", "all"];
+      if (typeof opts.trustSelf !== "string" || !validTrustSelfValues.includes(opts.trustSelf)) {
+        throw new Error('trustSelf must be either "known" or "all"');
+      }
+    }
+    if (opts.knownTxids !== void 0) {
+      if (!Array.isArray(opts.knownTxids)) {
+        throw new Error("knownTxids must be an array");
+      }
+      for (let i = 0; i < opts.knownTxids.length; i++) {
+        if (typeof opts.knownTxids[i] !== "string") {
+          throw new Error(`knownTxids[${i}] must be a string (hex txid)`);
+        }
+      }
+    }
+    if (opts.noSendChange !== void 0) {
+      if (!Array.isArray(opts.noSendChange)) {
+        throw new Error("noSendChange must be an array");
+      }
+      for (let i = 0; i < opts.noSendChange.length; i++) {
+        if (typeof opts.noSendChange[i] !== "string") {
+          throw new Error(`noSendChange[${i}] must be a string (outpoint format)`);
+        }
+      }
+    }
+    if (opts.sendWith !== void 0) {
+      if (!Array.isArray(opts.sendWith)) {
+        throw new Error("sendWith must be an array");
+      }
+      for (let i = 0; i < opts.sendWith.length; i++) {
+        if (typeof opts.sendWith[i] !== "string") {
+          throw new Error(`sendWith[${i}] must be a string (hex txid)`);
+        }
+      }
+    }
+    this.transactionOptions = { ...this.transactionOptions, ...opts };
+    return this;
+  }
+  /**
+   * Adds a P2PKH input to the transaction.
+   *
+   * @param sourceTransaction - The source transaction containing the output to spend
+   * @param sourceOutputIndex - The index of the output in the source transaction
+   * @param walletParams - Optional wallet derivation parameters (defaults to [2, 'p2pkh'], '0', 'self')
+   * @param description - Optional description for this input
+   * @param signOutputs - Signature scope: 'all', 'none', or 'single' (default: 'all')
+   * @param anyoneCanPay - Allow other inputs to be added later (default: false)
+   * @param sourceSatoshis - Optional amount in satoshis (otherwise requires sourceTransaction)
+   * @param lockingScript - Optional locking script (otherwise requires sourceTransaction)
+   * @returns An InputBuilder for the new input
+   */
+  addP2PKHInput(sourceTransaction, sourceOutputIndex, walletParams, description, signOutputs = "all", anyoneCanPay = false, sourceSatoshis, lockingScript) {
+    if (typeof sourceOutputIndex !== "number" || sourceOutputIndex < 0) {
+      throw new Error("sourceOutputIndex must be a non-negative number");
+    }
+    if (description !== void 0 && typeof description !== "string") {
+      throw new Error("description must be a string");
+    }
+    const inputConfig = {
+      type: "p2pkh",
+      sourceTransaction,
+      sourceOutputIndex,
+      description,
+      walletParams,
+      signOutputs,
+      anyoneCanPay,
+      sourceSatoshis,
+      lockingScript
+    };
+    this.inputs.push(inputConfig);
+    return new InputBuilder(this, inputConfig);
+  }
+  /**
+   * Adds an ordinalP2PKH input to the transaction.
+   *
+   * @param sourceTransaction - The source transaction containing the output to spend
+   * @param sourceOutputIndex - The index of the output in the source transaction
+   * @param walletParams - Optional wallet derivation parameters (defaults to [2, 'p2pkh'], '0', 'self')
+   * @param description - Optional description for this input
+   * @param signOutputs - Signature scope: 'all', 'none', or 'single' (default: 'all')
+   * @param anyoneCanPay - Allow other inputs to be added later (default: false)
+   * @param sourceSatoshis - Optional amount in satoshis (otherwise requires sourceTransaction)
+   * @param lockingScript - Optional locking script (otherwise requires sourceTransaction)
+   * @returns An InputBuilder for the new input
+   */
+  addOrdinalP2PKHInput(sourceTransaction, sourceOutputIndex, walletParams, description, signOutputs = "all", anyoneCanPay = false, sourceSatoshis, lockingScript) {
+    if (typeof sourceOutputIndex !== "number" || sourceOutputIndex < 0) {
+      throw new Error("sourceOutputIndex must be a non-negative number");
+    }
+    if (description !== void 0 && typeof description !== "string") {
+      throw new Error("description must be a string");
+    }
+    const inputConfig = {
+      type: "ordinalP2PKH",
+      sourceTransaction,
+      sourceOutputIndex,
+      description,
+      walletParams,
+      signOutputs,
+      anyoneCanPay,
+      sourceSatoshis,
+      lockingScript
+    };
+    this.inputs.push(inputConfig);
+    return new InputBuilder(this, inputConfig);
+  }
+  /**
+   * Adds a custom input with a pre-built unlocking script template.
+   *
+   * @param unlockingScriptTemplate - The unlocking script template for this input
+   * @param sourceTransaction - The source transaction containing the output to spend
+   * @param sourceOutputIndex - The index of the output in the source transaction
+   * @param description - Optional description for this input
+   * @param sourceSatoshis - Optional amount in satoshis
+   * @param lockingScript - Optional locking script
+   * @returns An InputBuilder for the new input
+   */
+  addCustomInput(unlockingScriptTemplate, sourceTransaction, sourceOutputIndex, description, sourceSatoshis, lockingScript) {
+    if (!unlockingScriptTemplate) {
+      throw new Error("unlockingScriptTemplate is required for custom input");
+    }
+    if (typeof sourceOutputIndex !== "number" || sourceOutputIndex < 0) {
+      throw new Error("sourceOutputIndex must be a non-negative number");
+    }
+    if (description !== void 0 && typeof description !== "string") {
+      throw new Error("description must be a string");
+    }
+    const inputConfig = {
+      type: "custom",
+      unlockingScriptTemplate,
+      sourceTransaction,
+      sourceOutputIndex,
+      description,
+      sourceSatoshis,
+      lockingScript
+    };
+    this.inputs.push(inputConfig);
+    return new InputBuilder(this, inputConfig);
+  }
+  /**
+   * Adds a P2PKH (Pay To Public Key Hash) output to the transaction.
+   *
+   * @param addressOrParams - Public key hex string or wallet derivation parameters (protocolID, keyID, counterparty)
+   * @param satoshis - Amount in satoshis for this output
+   * @param description - Optional description for this output
+   * @returns An OutputBuilder for configuring this output (e.g., adding OP_RETURN)
+   */
+  addP2PKHOutput(addressOrParams, satoshis, description) {
+    if (!addressOrParams) {
+      throw new Error("addressOrParams is required for P2PKH output");
+    }
+    if (typeof satoshis !== "number" || satoshis < 0) {
+      throw new Error("satoshis must be a non-negative number");
+    }
+    if (description !== void 0 && typeof description !== "string") {
+      throw new Error("description must be a string");
+    }
+    const outputConfig = {
+      type: "p2pkh",
+      satoshis,
+      description,
+      addressOrParams
+    };
+    this.outputs.push(outputConfig);
+    return new OutputBuilder(this, outputConfig);
+  }
+  /**
+   * Adds an ordinalP2PKH (1Sat Ordinal + P2PKH) output to the transaction.
+   *
+   * @param addressOrParams - Public key hex string or wallet derivation parameters (protocolID, keyID, counterparty)
+   * @param satoshis - Amount in satoshis for this output (typically 1 for ordinals)
+   * @param inscription - Optional inscription data with base64 file data and content type
+   * @param metadata - Optional MAP metadata with app, type, and custom properties
+   * @param description - Optional description for this output
+   * @returns An OutputBuilder for configuring this output (e.g., adding OP_RETURN)
+   */
+  addOrdinalP2PKHOutput(addressOrParams, satoshis, inscription, metadata, description) {
+    if (!addressOrParams) {
+      throw new Error("addressOrParams is required for ordinalP2PKH output");
+    }
+    if (typeof satoshis !== "number" || satoshis < 0) {
+      throw new Error("satoshis must be a non-negative number");
+    }
+    if (description !== void 0 && typeof description !== "string") {
+      throw new Error("description must be a string");
+    }
+    const outputConfig = {
+      type: "ordinalP2PKH",
+      satoshis,
+      description,
+      addressOrParams,
+      inscription,
+      metadata
+    };
+    this.outputs.push(outputConfig);
+    return new OutputBuilder(this, outputConfig);
+  }
+  /**
+   * Adds a custom output with a pre-built locking script.
+   *
+   * This is useful for advanced use cases where you need to use a locking script
+   * that isn't directly supported by the builder methods.
+   *
+   * @param lockingScript - The locking script for this output
+   * @param satoshis - Amount in satoshis for this output
+   * @param description - Optional description for this output
+   * @returns An OutputBuilder for configuring this output
+   */
+  addCustomOutput(lockingScript, satoshis, description) {
+    if (!lockingScript || typeof lockingScript.toHex !== "function") {
+      throw new Error("lockingScript must be a LockingScript instance");
+    }
+    if (typeof satoshis !== "number" || satoshis < 0) {
+      throw new Error("satoshis must be a non-negative number");
+    }
+    if (description !== void 0 && typeof description !== "string") {
+      throw new Error("description must be a string");
+    }
+    const outputConfig = {
+      type: "custom",
+      satoshis,
+      description,
+      lockingScript
+    };
+    this.outputs.push(outputConfig);
+    return new OutputBuilder(this, outputConfig);
+  }
+  /**
+   * Builds the transaction using wallet.createAction().
+   *
+   * This method creates locking scripts for all outputs, applies OP_RETURN metadata
+   * where specified, calls wallet.createAction() with all outputs and options, and
+   * returns the transaction ID and transaction object.
+   *
+   * @returns Promise resolving to txid and tx from wallet.createAction()
+   * @throws Error if no outputs are configured or if locking script creation fails
+   */
+  async build() {
+    if (this.outputs.length === 0) {
+      throw new Error("At least one output is required to build a transaction");
+    }
+    const actionInputsConfig = [];
+    const signingInputs = [];
+    for (let i = 0; i < this.inputs.length; i++) {
+      const config = this.inputs[i];
+      let unlockingScriptTemplate;
+      switch (config.type) {
+        case "p2pkh":
+        case "ordinalP2PKH": {
+          const p2pkh = new P2PKH(this.wallet);
+          const walletParams = config.walletParams || {
+            protocolID: [2, "p2pkh"],
+            keyID: "0",
+            counterparty: "self"
+          };
+          unlockingScriptTemplate = p2pkh.unlock(
+            walletParams.protocolID,
+            walletParams.keyID,
+            walletParams.counterparty,
+            config.signOutputs || "all",
+            config.anyoneCanPay || false
+          );
+          break;
+        }
+        case "custom": {
+          unlockingScriptTemplate = config.unlockingScriptTemplate;
+          break;
+        }
+        default: {
+          throw new Error(`Unsupported input type: ${config.type}`);
+        }
+      }
+      const txid = config.sourceTransaction.id("hex");
+      const inputConfig = {
+        outpoint: `${txid}.${config.sourceOutputIndex}`,
+        inputDescription: config.description || "Transaction input"
+      };
+      const inputForSigning = {
+        sourceTransaction: config.sourceTransaction,
+        sourceOutputIndex: config.sourceOutputIndex,
+        unlockingScriptTemplate
+      };
+      signingInputs.push(inputForSigning);
+      actionInputsConfig.push(inputConfig);
+    }
+    const actionOutputs = [];
+    const signingOutputs = [];
+    for (let i = 0; i < this.outputs.length; i++) {
+      const config = this.outputs[i];
+      let lockingScript;
+      switch (config.type) {
+        case "p2pkh": {
+          const p2pkh = new P2PKH(this.wallet);
+          const addressOrParams = config.addressOrParams;
+          if (isDerivationParams(addressOrParams)) {
+            lockingScript = await p2pkh.lock(addressOrParams);
+          } else {
+            lockingScript = await p2pkh.lock(addressOrParams);
+          }
+          break;
+        }
+        case "ordinalP2PKH": {
+          const ordinal = new OrdP2PKH(this.wallet);
+          const addressOrParams = config.addressOrParams;
+          if (isDerivationParams(addressOrParams)) {
+            lockingScript = await ordinal.lock(addressOrParams, config.inscription, config.metadata);
+          } else {
+            lockingScript = await ordinal.lock(addressOrParams, config.inscription, config.metadata);
+          }
+          break;
+        }
+        case "custom": {
+          lockingScript = config.lockingScript;
+          break;
+        }
+        default: {
+          throw new Error(`Unsupported output type: ${config.type}`);
+        }
+      }
+      if (config.opReturnFields && config.opReturnFields.length > 0) {
+        lockingScript = addOpReturnData(lockingScript, config.opReturnFields);
+      }
+      const output = {
+        lockingScript: lockingScript.toHex(),
+        satoshis: config.satoshis,
+        outputDescription: config.description || "Transaction output"
+      };
+      const outputForSigning = {
+        lockingScript,
+        satoshis: config.satoshis
+      };
+      signingOutputs.push(outputForSigning);
+      actionOutputs.push(output);
+    }
+    const createActionOptions = {
+      ...this.transactionOptions
+    };
+    const actionInputs = [];
+    let inputBEEF;
+    if (signingInputs.length > 0) {
+      const tx = new import_sdk5.Transaction();
+      signingInputs.forEach((input) => {
+        tx.addInput(input);
+      });
+      signingOutputs.forEach((output) => {
+        tx.addOutput({
+          satoshis: output.satoshis,
+          lockingScript: output.lockingScript
+        });
+      });
+      await tx.fee(new import_sdk5.SatoshisPerKilobyte(DEFAULT_SAT_PER_KB));
+      await tx.sign();
+      for (let i = 0; i < actionInputsConfig.length; i++) {
+        const config = actionInputsConfig[i];
+        const signedInput = tx.inputs[i];
+        if (!signedInput.unlockingScript) {
+          throw new Error(`Failed to generate unlocking script for input ${i}`);
+        }
+        actionInputs.push({
+          outpoint: config.outpoint,
+          inputDescription: config.inputDescription,
+          unlockingScript: signedInput.unlockingScript.toHex()
+        });
+      }
+      if (signingInputs.length === 1) {
+        inputBEEF = signingInputs[0].sourceTransaction.toBEEF();
+      } else {
+        const mergedBeef = new import_sdk5.Beef();
+        signingInputs.forEach((input) => {
+          const beef = input.sourceTransaction.toBEEF();
+          mergedBeef.mergeBeef(beef);
+        });
+        inputBEEF = mergedBeef.toBinary();
+      }
+    }
+    const result = await this.wallet.createAction({
+      description: this._transactionDescription || "Transaction",
+      ...inputBEEF && { inputBEEF },
+      ...actionInputs.length > 0 && { inputs: actionInputs },
+      outputs: actionOutputs,
+      options: createActionOptions
+    });
+    return {
+      txid: result.txid,
+      tx: result.tx
+    };
+  }
+};
+
+// src/utils/mockWallet.ts
+var import_sdk6 = require("@bsv/sdk");
+var import_wallet_toolbox_client = require("@bsv/wallet-toolbox-client");
+async function makeWallet(chain, storageURL, privateKey) {
+  if (!chain) {
+    throw new Error('chain parameter is required (must be "test" or "main")');
+  }
+  if (chain !== "test" && chain !== "main") {
+    throw new Error(`Invalid chain "${chain}". Must be "test" or "main"`);
+  }
+  if (!storageURL) {
+    throw new Error("storageURL parameter is required");
+  }
+  if (!privateKey) {
+    throw new Error("privateKey parameter is required");
+  }
+  try {
+    const keyDeriver = new import_sdk6.KeyDeriver(new import_sdk6.PrivateKey(privateKey, "hex"));
+    const storageManager = new import_wallet_toolbox_client.WalletStorageManager(keyDeriver.identityKey);
+    const signer = new import_wallet_toolbox_client.WalletSigner(chain, keyDeriver, storageManager);
+    const services = new import_wallet_toolbox_client.Services(chain);
+    const wallet = new import_wallet_toolbox_client.Wallet(signer, services);
+    const client = new import_wallet_toolbox_client.StorageClient(wallet, storageURL);
+    await client.makeAvailable();
+    await storageManager.addWalletStorageProvider(client);
+    return wallet;
+  } catch (error) {
+    if (error instanceof Error) {
+      throw new Error(`Failed to create wallet: ${error.message}`);
+    }
+    throw new Error("Failed to create wallet: Unknown error");
+  }
+}
 // Annotate the CommonJS export names for ESM import in node:
 0 && (module.exports = {
+  InputBuilder,
+  OutputBuilder,
+  TransactionTemplate,
   WalletOrdP2PKH,
   WalletP2PKH,
   addOpReturnData,

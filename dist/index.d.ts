@@ -1,4 +1,4 @@
-import { WalletProtocol, WalletCounterparty, ScriptTemplate, WalletInterface, LockingScript, Script, Transaction, UnlockingScript, WalletClient } from '@bsv/sdk';
+import { WalletProtocol, WalletCounterparty, ScriptTemplate, WalletInterface, LockingScript, Script, Transaction, UnlockingScript, CreateActionOptions, CreateActionResult, WalletClient } from '@bsv/sdk';
 
 /**
  * Parameters for deriving a public key from a BRC-100 wallet.
@@ -121,6 +121,390 @@ declare class OrdP2PKH implements ScriptTemplate {
 }
 
 /**
+ * Configuration for a transaction input
+ */
+type InputConfig = {
+    type: 'p2pkh';
+    sourceTransaction: Transaction;
+    sourceOutputIndex: number;
+    description?: string;
+    walletParams?: WalletDerivationParams;
+    signOutputs?: 'all' | 'none' | 'single';
+    anyoneCanPay?: boolean;
+    sourceSatoshis?: number;
+    lockingScript?: Script;
+} | {
+    type: 'ordinalP2PKH';
+    sourceTransaction: Transaction;
+    sourceOutputIndex: number;
+    description?: string;
+    walletParams?: WalletDerivationParams;
+    signOutputs?: 'all' | 'none' | 'single';
+    anyoneCanPay?: boolean;
+    sourceSatoshis?: number;
+    lockingScript?: Script;
+} | {
+    type: 'custom';
+    sourceTransaction: Transaction;
+    sourceOutputIndex: number;
+    description?: string;
+    unlockingScriptTemplate: any;
+    sourceSatoshis?: number;
+    lockingScript?: Script;
+};
+/**
+ * Configuration for a transaction output
+ */
+type OutputConfig = {
+    type: 'p2pkh';
+    satoshis: number;
+    description?: string;
+    addressOrParams: string | WalletDerivationParams;
+    opReturnFields?: (string | number[])[];
+} | {
+    type: 'ordinalP2PKH';
+    satoshis: number;
+    description?: string;
+    addressOrParams: string | WalletDerivationParams;
+    inscription?: Inscription;
+    metadata?: MAP;
+    opReturnFields?: (string | number[])[];
+} | {
+    type: 'custom';
+    satoshis: number;
+    description?: string;
+    lockingScript: LockingScript;
+    opReturnFields?: (string | number[])[];
+};
+/**
+ * Builder class for configuring individual transaction inputs.
+ *
+ * This class allows you to chain methods to add more inputs/outputs or
+ * access transaction-level methods like build().
+ */
+declare class InputBuilder {
+    private parent;
+    private inputConfig;
+    constructor(parent: TransactionTemplate, inputConfig: InputConfig);
+    /**
+     * Sets the description for THIS input only.
+     *
+     * @param desc - Description for this specific input
+     * @returns This InputBuilder for further input configuration
+     */
+    inputDescription(desc: string): this;
+    /**
+     * Adds a P2PKH input to the transaction.
+     *
+     * @param sourceTransaction - The source transaction containing the output to spend
+     * @param sourceOutputIndex - The index of the output in the source transaction
+     * @param walletParams - Optional wallet derivation parameters
+     * @param description - Optional description for this input
+     * @param signOutputs - Signature scope: 'all', 'none', or 'single' (default: 'all')
+     * @param anyoneCanPay - Allow other inputs to be added later (default: false)
+     * @param sourceSatoshis - Optional amount in satoshis
+     * @param lockingScript - Optional locking script
+     * @returns A new InputBuilder for the new input
+     */
+    addP2PKHInput(sourceTransaction: Transaction, sourceOutputIndex: number, walletParams?: WalletDerivationParams, description?: string, signOutputs?: 'all' | 'none' | 'single', anyoneCanPay?: boolean, sourceSatoshis?: number, lockingScript?: Script): InputBuilder;
+    /**
+     * Adds an ordinalP2PKH input to the transaction.
+     *
+     * @param sourceTransaction - The source transaction containing the output to spend
+     * @param sourceOutputIndex - The index of the output in the source transaction
+     * @param walletParams - Optional wallet derivation parameters
+     * @param description - Optional description for this input
+     * @param signOutputs - Signature scope: 'all', 'none', or 'single' (default: 'all')
+     * @param anyoneCanPay - Allow other inputs to be added later (default: false)
+     * @param sourceSatoshis - Optional amount in satoshis
+     * @param lockingScript - Optional locking script
+     * @returns A new InputBuilder for the new input
+     */
+    addOrdinalP2PKHInput(sourceTransaction: Transaction, sourceOutputIndex: number, walletParams?: WalletDerivationParams, description?: string, signOutputs?: 'all' | 'none' | 'single', anyoneCanPay?: boolean, sourceSatoshis?: number, lockingScript?: Script): InputBuilder;
+    /**
+     * Adds a custom input with a pre-built unlocking script template.
+     *
+     * @param unlockingScriptTemplate - The unlocking script template for this input
+     * @param sourceTransaction - The source transaction containing the output to spend
+     * @param sourceOutputIndex - The index of the output in the source transaction
+     * @param description - Optional description for this input
+     * @param sourceSatoshis - Optional amount in satoshis
+     * @param lockingScript - Optional locking script
+     * @returns A new InputBuilder for the new input
+     */
+    addCustomInput(unlockingScriptTemplate: any, sourceTransaction: Transaction, sourceOutputIndex: number, description?: string, sourceSatoshis?: number, lockingScript?: Script): InputBuilder;
+    /**
+     * Adds a P2PKH output to the transaction.
+     *
+     * @param addressOrParams - Public key hex string or wallet derivation parameters
+     * @param satoshis - Amount in satoshis for this output
+     * @param description - Optional description for this output
+     * @returns A new OutputBuilder for the new output
+     */
+    addP2PKHOutput(addressOrParams: string | WalletDerivationParams, satoshis: number, description?: string): OutputBuilder;
+    /**
+     * Adds an ordinalP2PKH (1Sat Ordinal + P2PKH) output to the transaction.
+     *
+     * @param addressOrParams - Public key hex string or wallet derivation parameters
+     * @param satoshis - Amount in satoshis for this output (typically 1 for ordinals)
+     * @param inscription - Optional inscription data (dataB64, contentType)
+     * @param metadata - Optional MAP metadata (app, type, and custom properties)
+     * @param description - Optional description for this output
+     * @returns A new OutputBuilder for the new output
+     */
+    addOrdinalP2PKHOutput(addressOrParams: string | WalletDerivationParams, satoshis: number, inscription?: Inscription, metadata?: MAP, description?: string): OutputBuilder;
+    /**
+     * Adds a custom output with a pre-built locking script.
+     *
+     * @param lockingScript - The locking script for this output
+     * @param satoshis - Amount in satoshis for this output
+     * @param description - Optional description for this output
+     * @returns A new OutputBuilder for the new output
+     */
+    addCustomOutput(lockingScript: LockingScript, satoshis: number, description?: string): OutputBuilder;
+    /**
+     * Sets transaction-level options (convenience proxy to TransactionTemplate).
+     *
+     * @param opts - Transaction options (randomizeOutputs, etc.)
+     * @returns The parent TransactionTemplate for transaction-level chaining
+     */
+    options(opts: CreateActionOptions): TransactionTemplate;
+    /**
+     * Builds the transaction using wallet.createAction() (convenience proxy to TransactionTemplate).
+     *
+     * @returns Promise resolving to txid and tx from wallet.createAction()
+     */
+    build(): Promise<CreateActionResult>;
+}
+/**
+ * Builder class for configuring individual transaction outputs.
+ *
+ * This class allows you to chain methods to configure a specific output,
+ * such as adding OP_RETURN data. It also allows adding more outputs or
+ * accessing transaction-level methods like build().
+ */
+declare class OutputBuilder {
+    private parent;
+    private outputConfig;
+    constructor(parent: TransactionTemplate, outputConfig: OutputConfig);
+    /**
+     * Adds OP_RETURN data to THIS output only.
+     *
+     * @param fields - Array of data fields. Each field can be a UTF-8 string, hex string, or byte array
+     * @returns This OutputBuilder for further output configuration
+     */
+    addOpReturn(fields: (string | number[])[]): this;
+    /**
+     * Adds a P2PKH output to the transaction.
+     *
+     * @param addressOrParams - Public key hex string or wallet derivation parameters
+     * @param satoshis - Amount in satoshis for this output
+     * @param description - Optional description for this output
+     * @returns A new OutputBuilder for the new output
+     */
+    addP2PKHOutput(addressOrParams: string | WalletDerivationParams, satoshis: number, description?: string): OutputBuilder;
+    /**
+     * Adds a P2PKH input to the transaction.
+     *
+     * @param sourceTransaction - The source transaction containing the output to spend
+     * @param sourceOutputIndex - The index of the output in the source transaction
+     * @param walletParams - Optional wallet derivation parameters (defaults to [2, 'p2pkh'], '0', 'self')
+     * @param description - Optional description for this input
+     * @param signOutputs - Signature scope: 'all', 'none', or 'single' (default: 'all')
+     * @param anyoneCanPay - Allow other inputs to be added later (default: false)
+     * @param sourceSatoshis - Optional amount in satoshis (otherwise requires sourceTransaction)
+     * @param lockingScript - Optional locking script (otherwise requires sourceTransaction)
+     * @returns A new InputBuilder for the new input
+     */
+    addP2PKHInput(sourceTransaction: Transaction, sourceOutputIndex: number, walletParams?: WalletDerivationParams, description?: string, signOutputs?: 'all' | 'none' | 'single', anyoneCanPay?: boolean, sourceSatoshis?: number, lockingScript?: Script): InputBuilder;
+    /**
+     * Adds an ordinalP2PKH input to the transaction.
+     *
+     * @param sourceTransaction - The source transaction containing the output to spend
+     * @param sourceOutputIndex - The index of the output in the source transaction
+     * @param walletParams - Optional wallet derivation parameters (defaults to [2, 'p2pkh'], '0', 'self')
+     * @param description - Optional description for this input
+     * @param signOutputs - Signature scope: 'all', 'none', or 'single' (default: 'all')
+     * @param anyoneCanPay - Allow other inputs to be added later (default: false)
+     * @param sourceSatoshis - Optional amount in satoshis (otherwise requires sourceTransaction)
+     * @param lockingScript - Optional locking script (otherwise requires sourceTransaction)
+     * @returns A new InputBuilder for the new input
+     */
+    addOrdinalP2PKHInput(sourceTransaction: Transaction, sourceOutputIndex: number, walletParams?: WalletDerivationParams, description?: string, signOutputs?: 'all' | 'none' | 'single', anyoneCanPay?: boolean, sourceSatoshis?: number, lockingScript?: Script): InputBuilder;
+    /**
+     * Adds a custom input with a pre-built unlocking script template.
+     *
+     * @param unlockingScriptTemplate - The unlocking script template for this input
+     * @param sourceTransaction - The source transaction containing the output to spend
+     * @param sourceOutputIndex - The index of the output in the source transaction
+     * @param description - Optional description for this input
+     * @param sourceSatoshis - Optional amount in satoshis
+     * @param lockingScript - Optional locking script
+     * @returns A new InputBuilder for the new input
+     */
+    addCustomInput(unlockingScriptTemplate: any, sourceTransaction: Transaction, sourceOutputIndex: number, description?: string, sourceSatoshis?: number, lockingScript?: Script): InputBuilder;
+    /**
+     * Adds an ordinalP2PKH (1Sat Ordinal + P2PKH) output to the transaction.
+     *
+     * @param addressOrParams - Public key hex string or wallet derivation parameters
+     * @param satoshis - Amount in satoshis for this output (typically 1 for ordinals)
+     * @param inscription - Optional inscription data (dataB64, contentType)
+     * @param metadata - Optional MAP metadata (app, type, and custom properties)
+     * @param description - Optional description for this output
+     * @returns A new OutputBuilder for the new output
+     */
+    addOrdinalP2PKHOutput(addressOrParams: string | WalletDerivationParams, satoshis: number, inscription?: Inscription, metadata?: MAP, description?: string): OutputBuilder;
+    /**
+     * Adds a custom output with a pre-built locking script.
+     *
+     * @param lockingScript - The locking script for this output
+     * @param satoshis - Amount in satoshis for this output
+     * @param description - Optional description for this output
+     * @returns A new OutputBuilder for the new output
+     */
+    addCustomOutput(lockingScript: LockingScript, satoshis: number, description?: string): OutputBuilder;
+    /**
+     * Sets the description for THIS output only.
+     *
+     * @param desc - Description for this specific output
+     * @returns This OutputBuilder for further output configuration
+     */
+    outputDescription(desc: string): this;
+    /**
+     * Sets transaction-level options (convenience proxy to TransactionTemplate).
+     *
+     * @param opts - Transaction options (randomizeOutputs, etc.)
+     * @returns The parent TransactionTemplate for transaction-level chaining
+     */
+    options(opts: CreateActionOptions): TransactionTemplate;
+    /**
+     * Builds the transaction using wallet.createAction() (convenience proxy to TransactionTemplate).
+     *
+     * @returns Promise resolving to txid and tx from wallet.createAction()
+     */
+    build(): Promise<CreateActionResult>;
+}
+/**
+ * TransactionTemplate - Builder class for creating BSV transactions with fluent API.
+ *
+ * This class provides a chainable interface for building transactions with multiple
+ * outputs, metadata, and wallet integration. It simplifies the process of creating
+ * transactions by abstracting away the low-level details of locking scripts and
+ * wallet interactions.
+ */
+declare class TransactionTemplate {
+    private wallet;
+    private _transactionDescription?;
+    private inputs;
+    private outputs;
+    private transactionOptions;
+    /**
+     * Creates a new TransactionTemplate builder.
+     *
+     * @param wallet - BRC-100 compatible wallet interface for signing and key derivation
+     * @param description - Optional description for the entire transaction
+     */
+    constructor(wallet: WalletInterface, description?: string);
+    /**
+     * Sets the transaction-level description.
+     *
+     * @param desc - Description for the entire transaction
+     * @returns This TransactionTemplate for further chaining
+     */
+    transactionDescription(desc: string): this;
+    /**
+     * Sets transaction-level options.
+     *
+     * @param opts - Transaction options (randomizeOutputs, trustSelf, signAndProcess, etc.)
+     * @returns This TransactionTemplate for further chaining
+     */
+    options(opts: CreateActionOptions): this;
+    /**
+     * Adds a P2PKH input to the transaction.
+     *
+     * @param sourceTransaction - The source transaction containing the output to spend
+     * @param sourceOutputIndex - The index of the output in the source transaction
+     * @param walletParams - Optional wallet derivation parameters (defaults to [2, 'p2pkh'], '0', 'self')
+     * @param description - Optional description for this input
+     * @param signOutputs - Signature scope: 'all', 'none', or 'single' (default: 'all')
+     * @param anyoneCanPay - Allow other inputs to be added later (default: false)
+     * @param sourceSatoshis - Optional amount in satoshis (otherwise requires sourceTransaction)
+     * @param lockingScript - Optional locking script (otherwise requires sourceTransaction)
+     * @returns An InputBuilder for the new input
+     */
+    addP2PKHInput(sourceTransaction: Transaction, sourceOutputIndex: number, walletParams?: WalletDerivationParams, description?: string, signOutputs?: 'all' | 'none' | 'single', anyoneCanPay?: boolean, sourceSatoshis?: number, lockingScript?: Script): InputBuilder;
+    /**
+     * Adds an ordinalP2PKH input to the transaction.
+     *
+     * @param sourceTransaction - The source transaction containing the output to spend
+     * @param sourceOutputIndex - The index of the output in the source transaction
+     * @param walletParams - Optional wallet derivation parameters (defaults to [2, 'p2pkh'], '0', 'self')
+     * @param description - Optional description for this input
+     * @param signOutputs - Signature scope: 'all', 'none', or 'single' (default: 'all')
+     * @param anyoneCanPay - Allow other inputs to be added later (default: false)
+     * @param sourceSatoshis - Optional amount in satoshis (otherwise requires sourceTransaction)
+     * @param lockingScript - Optional locking script (otherwise requires sourceTransaction)
+     * @returns An InputBuilder for the new input
+     */
+    addOrdinalP2PKHInput(sourceTransaction: Transaction, sourceOutputIndex: number, walletParams?: WalletDerivationParams, description?: string, signOutputs?: 'all' | 'none' | 'single', anyoneCanPay?: boolean, sourceSatoshis?: number, lockingScript?: Script): InputBuilder;
+    /**
+     * Adds a custom input with a pre-built unlocking script template.
+     *
+     * @param unlockingScriptTemplate - The unlocking script template for this input
+     * @param sourceTransaction - The source transaction containing the output to spend
+     * @param sourceOutputIndex - The index of the output in the source transaction
+     * @param description - Optional description for this input
+     * @param sourceSatoshis - Optional amount in satoshis
+     * @param lockingScript - Optional locking script
+     * @returns An InputBuilder for the new input
+     */
+    addCustomInput(unlockingScriptTemplate: any, sourceTransaction: Transaction, sourceOutputIndex: number, description?: string, sourceSatoshis?: number, lockingScript?: Script): InputBuilder;
+    /**
+     * Adds a P2PKH (Pay To Public Key Hash) output to the transaction.
+     *
+     * @param addressOrParams - Public key hex string or wallet derivation parameters (protocolID, keyID, counterparty)
+     * @param satoshis - Amount in satoshis for this output
+     * @param description - Optional description for this output
+     * @returns An OutputBuilder for configuring this output (e.g., adding OP_RETURN)
+     */
+    addP2PKHOutput(addressOrParams: string | WalletDerivationParams, satoshis: number, description?: string): OutputBuilder;
+    /**
+     * Adds an ordinalP2PKH (1Sat Ordinal + P2PKH) output to the transaction.
+     *
+     * @param addressOrParams - Public key hex string or wallet derivation parameters (protocolID, keyID, counterparty)
+     * @param satoshis - Amount in satoshis for this output (typically 1 for ordinals)
+     * @param inscription - Optional inscription data with base64 file data and content type
+     * @param metadata - Optional MAP metadata with app, type, and custom properties
+     * @param description - Optional description for this output
+     * @returns An OutputBuilder for configuring this output (e.g., adding OP_RETURN)
+     */
+    addOrdinalP2PKHOutput(addressOrParams: string | WalletDerivationParams, satoshis: number, inscription?: Inscription, metadata?: MAP, description?: string): OutputBuilder;
+    /**
+     * Adds a custom output with a pre-built locking script.
+     *
+     * This is useful for advanced use cases where you need to use a locking script
+     * that isn't directly supported by the builder methods.
+     *
+     * @param lockingScript - The locking script for this output
+     * @param satoshis - Amount in satoshis for this output
+     * @param description - Optional description for this output
+     * @returns An OutputBuilder for configuring this output
+     */
+    addCustomOutput(lockingScript: LockingScript, satoshis: number, description?: string): OutputBuilder;
+    /**
+     * Builds the transaction using wallet.createAction().
+     *
+     * This method creates locking scripts for all outputs, applies OP_RETURN metadata
+     * where specified, calls wallet.createAction() with all outputs and options, and
+     * returns the transaction ID and transaction object.
+     *
+     * @returns Promise resolving to txid and tx from wallet.createAction()
+     * @throws Error if no outputs are configured or if locking script creation fails
+     */
+    build(): Promise<CreateActionResult>;
+}
+
+/**
  * Wallet creation utilities for BSV blockchain
  * Based on BSV wallet-toolbox-client
  */
@@ -157,4 +541,4 @@ declare function calculatePreimage(tx: Transaction, inputIndex: number, signOutp
  */
 declare const addOpReturnData: (script: LockingScript, fields: (string | number[])[]) => LockingScript;
 
-export { type Inscription, type MAP, type WalletDerivationParams, OrdP2PKH as WalletOrdP2PKH, P2PKH as WalletP2PKH, addOpReturnData, calculatePreimage, makeWallet };
+export { InputBuilder, type Inscription, type MAP, OutputBuilder, TransactionTemplate, type WalletDerivationParams, OrdP2PKH as WalletOrdP2PKH, P2PKH as WalletP2PKH, addOpReturnData, calculatePreimage, makeWallet };
