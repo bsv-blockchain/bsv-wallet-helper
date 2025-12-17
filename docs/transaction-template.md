@@ -114,13 +114,13 @@ TransactionTemplate handles all the complexity:
 ### Installation
 
 ```bash
-npm install bsv-wallet-scripts
+npm install bsv-wallet-helper
 ```
 
 ### Basic Transaction
 
 ```typescript
-import { TransactionTemplate, makeWallet } from 'bsv-wallet-scripts';
+import { TransactionTemplate, makeWallet } from 'bsv-wallet-helper';
 import { WalletClient } from '@bsv/sdk';
 
 // Create wallet or use WalletClient
@@ -262,7 +262,7 @@ addChangeOutput(
 
 **Example:**
 ```typescript
-import { TransactionTemplate } from 'bsv-wallet-scripts';
+import { TransactionTemplate } from 'bsv-wallet-helper';
 import { Transaction } from '@bsv/sdk';
 
 // Create change output with wallet derivation
@@ -920,7 +920,7 @@ const result = await template.build();
 ### Type-Safe Wallet Derivation
 
 ```typescript
-import { WalletDerivationParams, WalletProtocol, WalletCounterparty } from 'bsv-wallet-scripts';
+import { WalletDerivationParams, WalletProtocol, WalletCounterparty } from 'bsv-wallet-helper';
 
 const derivationParams: WalletDerivationParams = {
   protocolID: [2, 'p2pkh'] as WalletProtocol,
@@ -959,7 +959,7 @@ const spendResult = await new TransactionTemplate(wallet, "Spending stored UTXO"
 When using wallet derivation, store the parameters with your UTXO. This is **especially important for change outputs**:
 
 ```typescript
-import { TransactionTemplate } from 'bsv-wallet-scripts';
+import { TransactionTemplate } from 'bsv-wallet-helper';
 import { Transaction } from '@bsv/sdk';
 
 // ✅ Good: Store params for later spending
