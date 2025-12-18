@@ -100,14 +100,14 @@ describe('TransactionTemplate', () => {
       expect(outputs[0].addressOrParams).toEqual(params);
     });
 
-    test('should throw error when addressOrParams is missing', async () => {
+    test('should allow undefined addressOrParams (uses BRC-29 derivation)', async () => {
       const privateKey = new PrivateKey(5);
       const wallet = await makeWallet('test', storageURL, privateKey.toHex());
 
+      // Should not throw - will use BRC-29 derivation
       expect(() => {
-        // @ts-ignore - intentionally testing invalid input
-        new TransactionTemplate(wallet).addP2PKHOutput(null, 1000);
-      }).toThrow('addressOrParams is required for P2PKH output');
+        new TransactionTemplate(wallet).addP2PKHOutput(undefined, 1000);
+      }).not.toThrow();
     });
 
     test('should throw error when satoshis is negative', async () => {
@@ -880,14 +880,14 @@ describe('TransactionTemplate', () => {
       expect(outputs[0].description).toBe("Change");
     });
 
-    test('should throw error when addressOrParams is missing', async () => {
+    test('should allow undefined addressOrParams (uses BRC-29 derivation)', async () => {
       const privateKey = new PrivateKey(153);
       const wallet = await makeWallet('test', storageURL, privateKey.toHex());
 
+      // Should not throw - will use BRC-29 derivation
       expect(() => {
-        // @ts-ignore - intentionally testing invalid input
-        new TransactionTemplate(wallet).addChangeOutput(null);
-      }).toThrow('addressOrParams is required for change output');
+        new TransactionTemplate(wallet).addChangeOutput(undefined);
+      }).not.toThrow();
     });
 
     test('should throw error when description is not a string', async () => {

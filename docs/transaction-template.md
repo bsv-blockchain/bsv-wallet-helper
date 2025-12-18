@@ -203,14 +203,14 @@ Add a Pay-to-Public-Key-Hash output.
 
 ```typescript
 addP2PKHOutput(
-  addressOrParams: string | WalletDerivationParams,
+  addressOrParams?: string | WalletDerivationParams,
   satoshis: number,
   description?: string
 ): OutputBuilder
 ```
 
 **Parameters:**
-- `addressOrParams` - Public key hex string OR wallet derivation parameters
+- `addressOrParams` - Public key hex string, wallet derivation parameters, or `undefined` for automatic BRC-29 derivation
 - `satoshis` - Amount in satoshis (must be non-negative)
 - `description` - Optional output description
 
@@ -221,12 +221,16 @@ addP2PKHOutput(
 // With public key
 template.addP2PKHOutput(publicKeyHex, 1000, "Payment");
 
-// With wallet derivation
+// With wallet derivation parameters
 template.addP2PKHOutput({
   protocolID: [2, 'p2pkh'],
   keyID: '0',
   counterparty: 'self'
-}, 1000, "Change");
+}, 1000, "Payment");
+
+// With automatic BRC-29 derivation (recommended for most use cases)
+template.addP2PKHOutput(undefined, 1000, "Payment");
+// Derivation info automatically added to output.customInstructions
 ```
 
 ---
@@ -237,13 +241,13 @@ Add a change output with automatic satoshi calculation during signing.
 
 ```typescript
 addChangeOutput(
-  addressOrParams: string | WalletDerivationParams,
+  addressOrParams?: string | WalletDerivationParams,
   description?: string
 ): OutputBuilder
 ```
 
 **Parameters:**
-- `addressOrParams` - Public key hex string OR wallet derivation parameters
+- `addressOrParams` - Public key hex string, wallet derivation parameters, or `undefined` for automatic BRC-29 derivation
 - `description` - Optional output description (default: "Change")
 
 **Returns:** `OutputBuilder` for configuring this output
@@ -412,6 +416,71 @@ template.addP2PKHOutput(publicKey, 1)
 
 ---
 
+#### `basket()`
+
+Set the basket for the current output. Baskets are used to organize and track outputs in your wallet.
+
+```typescript
+basket(value: string): OutputBuilder
+```
+
+**Parameters:**
+- `value` - Basket name/identifier (non-empty string)
+
+**Returns:** `OutputBuilder` (same output, can chain more output methods)
+
+**Throws:** `Error` if value is empty or not a string
+
+**Example:**
+```typescript
+template.addP2PKHOutput(publicKey, 1000, "Payment")
+  .basket("merchant-payments");
+
+// Chain with other methods
+template.addP2PKHOutput(publicKey, 5000)
+  .basket("savings")
+  .addOpReturn(['note', 'This is savings']);
+```
+
+---
+
+#### `customInstructions()`
+
+Set custom instructions for the current output. This field can contain application-specific data in string format.
+
+**Note:** If using automatic BRC-29 derivation (by omitting `addressOrParams`), the derivation information will be automatically appended after your custom instructions.
+
+```typescript
+customInstructions(value: string): OutputBuilder
+```
+
+**Parameters:**
+- `value` - Custom instructions string (non-empty)
+
+**Returns:** `OutputBuilder` (same output, can chain more output methods)
+
+**Throws:** `Error` if value is empty or not a string
+
+**Example:**
+```typescript
+// Set custom application data
+template.addP2PKHOutput(publicKey, 1000)
+  .customInstructions(JSON.stringify({ orderId: 12345, customerId: 'abc' }));
+
+// With BRC-29 auto-derivation - derivation info is appended
+template.addP2PKHOutput(undefined, 1000)  // Uses BRC-29 derivation
+  .customInstructions('app-data')
+  .basket("payments");
+// Result: customInstructions = 'app-data' + '{"derivationPrefix":"...","derivationSuffix":"..."}'
+
+// Chain with other output methods
+template.addChangeOutput()  // Auto-derived change
+  .customInstructions('{"changeType":"auto"}')
+  .basket("change-outputs");
+```
+
+---
+
 #### `outputDescription()`
 
 Set or update the description for the current output.
@@ -456,7 +525,7 @@ addP2PKHInput(
 **Parameters:**
 - `sourceTransaction` - Transaction containing the UTXO
 - `sourceOutputIndex` - Output index in source transaction
-- `walletParams` - Wallet derivation parameters (defaults to `[2, 'p2pkh'], '0', 'self'`)
+- `walletParams` - Wallet derivation parameters (defaults to BRC-29 derivation scheme with counterparty 'self')
 - `description` - Optional input description
 - `signOutputs` - Signature scope: 'all' (default), 'none', 'single'
 - `anyoneCanPay` - SIGHASH_ANYONECANPAY flag (default: false)

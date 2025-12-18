@@ -45,8 +45,10 @@ console.log('Transaction preview:', preview);
 **Features:**
 - Fluent API with method chaining
 - Support for P2PKH, Ordinal P2PKH, and custom outputs
+- **Automatic BRC-29 derivation** - omit addressOrParams to use secure random key derivation
 - **Automatic change outputs** with fee calculation
 - Per-output OP_RETURN metadata
+- Per-output basket and customInstructions fields
 - Transaction-level options (randomizeOutputs, trustSelf, etc.)
 - Preview mode to inspect before execution
 - Input support for spending UTXOs
@@ -61,6 +63,19 @@ await new TransactionTemplate(wallet, "Payment with change")
   .addP2PKHOutput(recipientPublicKey, 5000, "Payment")
   .addChangeOutput(walletParams, "Change") // Satoshis calculated automatically!
   .build();
+```
+
+**Example with BRC-29 auto-derivation, basket, and customInstructions:**
+```typescript
+// Omit addressOrParams to use automatic BRC-29 derivation
+// Derivation info is automatically added to customInstructions
+await new TransactionTemplate(wallet, "Auto-derived transaction")
+  .addP2PKHOutput(undefined, 1000, "Payment")  // Uses BRC-29 derivation
+    .basket("my-basket")  // Set basket for this output
+    .customInstructions("app-specific-data")  // Append custom instructions
+  .build();
+
+// The output will have customInstructions with both app data and derivation info
 ```
 
 ### Script Templates
@@ -134,6 +149,8 @@ type WalletDerivationParams = {
   counterparty: WalletCounterparty;  // e.g., 'self'
 };
 ```
+
+**Note:** When wallet derivation parameters are omitted, the library uses the BRC-29 derivation scheme by default (using `brc29ProtocolID` from `@bsv/wallet-toolbox-client` and a randomly generated keyID), with `counterparty` defaulting to `'self'`.
 
 #### `Inscription`
 1Sat Ordinal inscription data.

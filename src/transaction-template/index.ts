@@ -1,1 +1,2 @@
-export { TransactionTemplate, OutputBuilder, InputBuilder, type BuildParams } from './transaction.js'
+export { TransactionTemplate, OutputBuilder, InputBuilder } from './transaction.js';
+export { type BuildParams } from './types';

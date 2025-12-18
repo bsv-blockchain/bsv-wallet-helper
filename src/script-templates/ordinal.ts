@@ -131,8 +131,8 @@ export default class OrdP2PKH implements ScriptTemplate {
 	 * @returns An object containing the `sign` and `estimateLength` functions
 	 */
 	unlock(
-		protocolID: WalletProtocol = [2, "p2pkh"],
-		keyID: string = '0',
+		protocolID?: WalletProtocol,
+		keyID?: string,
 		counterparty: WalletCounterparty = 'self',
 		signOutputs: 'all' | 'none' | 'single' = 'all',
 		anyoneCanPay: boolean = false,

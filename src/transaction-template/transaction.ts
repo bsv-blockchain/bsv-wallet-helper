@@ -15,96 +15,10 @@ import {
 import P2PKH from "../script-templates/p2pkh";
 import OrdP2PKH, { Inscription, MAP } from "../script-templates/ordinal";
 import { WalletDerivationParams } from "../types/wallet";
+import { getDerivation } from "../utils";
 import { addOpReturnData } from "../utils/opreturn";
-import { DEFAULT_SAT_PER_KB } from "../utils/constants"
-
-/**
- * Parameters for the build() method
- */
-export interface BuildParams {
-    /** If true, returns the createAction arguments without executing the transaction */
-    preview?: boolean;
-}
-
-/**
- * Type guard to check if a value is WalletDerivationParams
- */
-function isDerivationParams(
-    value: string | number[] | WalletDerivationParams
-): value is WalletDerivationParams {
-    return typeof value === 'object' && value !== null && !Array.isArray(value);
-}
-
-/**
- * Configuration for a transaction input
- */
-type InputConfig =
-| {
-    type: 'p2pkh';
-    sourceTransaction: Transaction;
-    sourceOutputIndex: number;
-    description?: string;
-    walletParams?: WalletDerivationParams;
-    signOutputs?: 'all' | 'none' | 'single';
-    anyoneCanPay?: boolean;
-    sourceSatoshis?: number;
-    lockingScript?: Script;
-}
-| {
-    type: 'ordinalP2PKH';
-    sourceTransaction: Transaction;
-    sourceOutputIndex: number;
-    description?: string;
-    walletParams?: WalletDerivationParams;
-    signOutputs?: 'all' | 'none' | 'single';
-    anyoneCanPay?: boolean;
-    sourceSatoshis?: number;
-    lockingScript?: Script;
-}
-| {
-    type: 'custom';
-    sourceTransaction: Transaction;
-    sourceOutputIndex: number;
-    description?: string;
-    unlockingScriptTemplate: any; // UnlockingScriptTemplate from SDK
-    sourceSatoshis?: number;
-    lockingScript?: Script;
-};
-
-/**
- * Configuration for a transaction output
- */
-type OutputConfig =
-    | {
-        type: 'p2pkh';
-        satoshis: number;
-        description?: string;
-        addressOrParams: string | WalletDerivationParams;
-        opReturnFields?: (string | number[])[];
-    }
-    | {
-        type: 'ordinalP2PKH';
-        satoshis: number;
-        description?: string;
-        addressOrParams: string | WalletDerivationParams;
-        inscription?: Inscription;
-        metadata?: MAP;
-        opReturnFields?: (string | number[])[];
-    }
-    | {
-        type: 'custom';
-        satoshis: number;
-        description?: string;
-        lockingScript: LockingScript;
-        opReturnFields?: (string | number[])[];
-    }
-    | {
-        type: 'change';
-        satoshis?: number; // Calculated during signing, optional for config
-        description?: string;
-        addressOrParams: string | WalletDerivationParams;
-        opReturnFields?: (string | number[])[];
-    };
+import { DEFAULT_SAT_PER_KB } from "../utils/constants";
+import { BuildParams, InputConfig, OutputConfig, isDerivationParams } from "./types";
 
 /**
  * Builder class for configuring individual transaction inputs.
@@ -346,15 +260,43 @@ export class OutputBuilder {
     }
 
     /**
+     * Sets the basket for THIS output only.
+     *
+     * @param value - Basket name/identifier
+     * @returns This OutputBuilder for further output configuration
+     */
+    basket(value: string): this {
+        if (typeof value !== 'string' || value.length === 0) {
+            throw new Error('basket requires a non-empty string');
+        }
+        this.outputConfig.basket = value;
+        return this;
+    }
+
+    /**
+     * Sets custom instructions for THIS output only.
+     *
+     * @param value - Custom instructions (typically JSON string)
+     * @returns This OutputBuilder for further output configuration
+     */
+    customInstructions(value: string): this {
+        if (typeof value !== 'string' || value.length === 0) {
+            throw new Error('customInstructions requires a non-empty string');
+        }
+        this.outputConfig.customInstructions = value;
+        return this;
+    }
+
+    /**
      * Adds a P2PKH output to the transaction.
      *
-     * @param addressOrParams - Public key hex string or wallet derivation parameters
+     * @param addressOrParams - Public key hex string or wallet derivation parameters. If omitted, uses BRC-29 derivation scheme.
      * @param satoshis - Amount in satoshis for this output
      * @param description - Optional description for this output
      * @returns A new OutputBuilder for the new output
      */
     addP2PKHOutput(
-        addressOrParams: string | WalletDerivationParams,
+        addressOrParams: string | WalletDerivationParams | undefined,
         satoshis: number,
         description?: string
     ): OutputBuilder {
@@ -368,12 +310,12 @@ export class OutputBuilder {
     /**
      * Adds a change output that automatically calculates the change amount.
      *
-     * @param addressOrParams - Public key hex or wallet derivation parameters
+     * @param addressOrParams - Public key hex or wallet derivation parameters. If omitted, uses BRC-29 derivation scheme.
      * @param description - Optional description for this output
      * @returns A new OutputBuilder for the new output
      */
     addChangeOutput(
-        addressOrParams: string | WalletDerivationParams,
+        addressOrParams?: string | WalletDerivationParams,
         description?: string
     ): OutputBuilder {
         return this.parent.addChangeOutput(addressOrParams, description);
@@ -384,7 +326,7 @@ export class OutputBuilder {
      *
      * @param sourceTransaction - The source transaction containing the output to spend
      * @param sourceOutputIndex - The index of the output in the source transaction
-     * @param walletParams - Optional wallet derivation parameters (defaults to [2, 'p2pkh'], '0', 'self')
+     * @param walletParams - Optional wallet derivation parameters (defaults to BRC-29 derivation scheme with counterparty 'self')
      * @param description - Optional description for this input
      * @param signOutputs - Signature scope: 'all', 'none', or 'single' (default: 'all')
      * @param anyoneCanPay - Allow other inputs to be added later (default: false)
@@ -419,7 +361,7 @@ export class OutputBuilder {
      *
      * @param sourceTransaction - The source transaction containing the output to spend
      * @param sourceOutputIndex - The index of the output in the source transaction
-     * @param walletParams - Optional wallet derivation parameters (defaults to [2, 'p2pkh'], '0', 'self')
+     * @param walletParams - Optional wallet derivation parameters (defaults to BRC-29 derivation scheme with counterparty 'self')
      * @param description - Optional description for this input
      * @param signOutputs - Signature scope: 'all', 'none', or 'single' (default: 'all')
      * @param anyoneCanPay - Allow other inputs to be added later (default: false)
@@ -681,7 +623,7 @@ export class TransactionTemplate {
      *
      * @param sourceTransaction - The source transaction containing the output to spend
      * @param sourceOutputIndex - The index of the output in the source transaction
-     * @param walletParams - Optional wallet derivation parameters (defaults to [2, 'p2pkh'], '0', 'self')
+     * @param walletParams - Optional wallet derivation parameters (defaults to BRC-29 derivation scheme with counterparty 'self')
      * @param description - Optional description for this input
      * @param signOutputs - Signature scope: 'all', 'none', or 'single' (default: 'all')
      * @param anyoneCanPay - Allow other inputs to be added later (default: false)
@@ -728,7 +670,7 @@ export class TransactionTemplate {
      *
      * @param sourceTransaction - The source transaction containing the output to spend
      * @param sourceOutputIndex - The index of the output in the source transaction
-     * @param walletParams - Optional wallet derivation parameters (defaults to [2, 'p2pkh'], '0', 'self')
+     * @param walletParams - Optional wallet derivation parameters (defaults to BRC-29 derivation scheme with counterparty 'self')
      * @param description - Optional description for this input
      * @param signOutputs - Signature scope: 'all', 'none', or 'single' (default: 'all')
      * @param anyoneCanPay - Allow other inputs to be added later (default: false)
@@ -817,20 +759,17 @@ export class TransactionTemplate {
     /**
      * Adds a P2PKH (Pay To Public Key Hash) output to the transaction.
      *
-     * @param addressOrParams - Public key hex string or wallet derivation parameters (protocolID, keyID, counterparty)
+     * @param addressOrParams - Public key hex string or wallet derivation parameters. If omitted, uses BRC-29 derivation scheme.
      * @param satoshis - Amount in satoshis for this output
      * @param description - Optional description for this output
      * @returns An OutputBuilder for configuring this output (e.g., adding OP_RETURN)
      */
     addP2PKHOutput(
-        addressOrParams: string | WalletDerivationParams,
+        addressOrParams: string | WalletDerivationParams | undefined,
         satoshis: number,
         description?: string
     ): OutputBuilder {
-        // Validate parameters
-        if (!addressOrParams) {
-            throw new Error('addressOrParams is required for P2PKH output');
-        }
+        // Validate parameters (addressOrParams is now optional - will use BRC-29 derivation if not provided)
         if (typeof satoshis !== 'number' || satoshis < 0) {
             throw new Error('satoshis must be a non-negative number');
         }
@@ -854,18 +793,15 @@ export class TransactionTemplate {
      *
      * The satoshi amount is calculated as: inputs - outputs - fees
      *
-     * @param addressOrParams - Public key hex string or wallet derivation parameters for receiving change
+     * @param addressOrParams - Public key hex string or wallet derivation parameters. If omitted, uses BRC-29 derivation scheme.
      * @param description - Optional description for this output (default: "Change")
      * @returns An OutputBuilder for configuring this output (e.g., adding OP_RETURN)
      */
     addChangeOutput(
-        addressOrParams: string | WalletDerivationParams,
+        addressOrParams?: string | WalletDerivationParams,
         description?: string
     ): OutputBuilder {
-        // Validate parameters
-        if (!addressOrParams) {
-            throw new Error('addressOrParams is required for change output');
-        }
+        // Validate parameters (addressOrParams is now optional - will use BRC-29 derivation if not provided)
         if (description !== undefined && typeof description !== 'string') {
             throw new Error('description must be a string');
         }
@@ -883,7 +819,7 @@ export class TransactionTemplate {
     /**
      * Adds an ordinalP2PKH (1Sat Ordinal + P2PKH) output to the transaction.
      *
-     * @param addressOrParams - Public key hex string or wallet derivation parameters (protocolID, keyID, counterparty)
+     * @param addressOrParams - Public key hex string or wallet derivation parameters. If omitted, uses BRC-29 derivation scheme.
      * @param satoshis - Amount in satoshis for this output (typically 1 for ordinals)
      * @param inscription - Optional inscription data with base64 file data and content type
      * @param metadata - Optional MAP metadata with app, type, and custom properties
@@ -891,16 +827,13 @@ export class TransactionTemplate {
      * @returns An OutputBuilder for configuring this output (e.g., adding OP_RETURN)
      */
     addOrdinalP2PKHOutput(
-        addressOrParams: string | WalletDerivationParams,
+        addressOrParams: string | WalletDerivationParams | undefined,
         satoshis: number,
         inscription?: Inscription,
         metadata?: MAP,
         description?: string
     ): OutputBuilder {
-        // Validate parameters
-        if (!addressOrParams) {
-            throw new Error('addressOrParams is required for ordinalP2PKH output');
-        }
+        // Validate parameters (addressOrParams is now optional - will use BRC-29 derivation if not provided)
         if (typeof satoshis !== 'number' || satoshis < 0) {
             throw new Error('satoshis must be a non-negative number');
         }
@@ -982,6 +915,9 @@ export class TransactionTemplate {
             throw new Error('Change outputs require at least one input');
         }
 
+        // Track derivation info for customInstructions
+        const derivationInfo: Array<{ outputIndex: number; derivationPrefix: string; derivationSuffix: string }> = [];
+
         // Build the inputs array for wallet.createAction()
         const actionInputsConfig = [];
 
@@ -1002,19 +938,15 @@ export class TransactionTemplate {
                     const p2pkh = new P2PKH(this.wallet);
 
                     // Create unlocking script template
-                    const walletParams = config.walletParams || {
-                        protocolID: [2, 'p2pkh'] as WalletProtocol,
-                        keyID: '0',
-                        counterparty: 'self' as WalletCounterparty
-                    };
+                    const walletParams = config.walletParams;
 
                     // Get the unlockingScript template
                     unlockingScriptTemplate = p2pkh.unlock(
-                        walletParams.protocolID,
-                        walletParams.keyID,
-                        walletParams.counterparty,
-                        config.signOutputs || 'all',
-                        config.anyoneCanPay || false
+                        walletParams?.protocolID,
+                        walletParams?.keyID,
+                        walletParams?.counterparty,
+                        config.signOutputs,
+                        config.anyoneCanPay
                     );
                     break;
                 }
@@ -1063,7 +995,26 @@ export class TransactionTemplate {
             switch (config.type) {
                 case 'p2pkh': {
                     const p2pkh = new P2PKH(this.wallet);
-                    const addressOrParams = config.addressOrParams;
+                    let addressOrParams = config.addressOrParams;
+
+                    // If no addressOrParams provided, use BRC-29 derivation
+                    if (!addressOrParams) {
+                        const derivation = getDerivation();
+                        addressOrParams = {
+                            protocolID: derivation.protocolID,
+                            keyID: derivation.keyID,
+                            counterparty: 'self'
+                        };
+
+                        // Track derivation for customInstructions
+                        const [derivationPrefix, derivationSuffix] = derivation.keyID.split(' ');
+                        derivationInfo.push({
+                            outputIndex: i,
+                            derivationPrefix,
+                            derivationSuffix
+                        });
+                    }
+
                     // Determine which overload to call
                     if (isDerivationParams(addressOrParams)) {
                         // Use wallet param overload
@@ -1076,7 +1027,26 @@ export class TransactionTemplate {
                 }
                 case 'ordinalP2PKH': {
                     const ordinal = new OrdP2PKH(this.wallet);
-                    const addressOrParams = config.addressOrParams;
+                    let addressOrParams = config.addressOrParams;
+
+                    // If no addressOrParams provided, use BRC-29 derivation
+                    if (!addressOrParams) {
+                        const derivation = getDerivation();
+                        addressOrParams = {
+                            protocolID: derivation.protocolID,
+                            keyID: derivation.keyID,
+                            counterparty: 'self'
+                        };
+
+                        // Track derivation for customInstructions
+                        const [derivationPrefix, derivationSuffix] = derivation.keyID.split(' ');
+                        derivationInfo.push({
+                            outputIndex: i,
+                            derivationPrefix,
+                            derivationSuffix
+                        });
+                    }
+
                     // Determine which overload to call
                     if (isDerivationParams(addressOrParams)) {
                         // Use wallet param overload
@@ -1095,7 +1065,26 @@ export class TransactionTemplate {
                 case 'change': {
                     // Change output - create locking script like P2PKH
                     const p2pkh = new P2PKH(this.wallet);
-                    const addressOrParams = config.addressOrParams;
+                    let addressOrParams = config.addressOrParams;
+
+                    // If no addressOrParams provided, use BRC-29 derivation
+                    if (!addressOrParams) {
+                        const derivation = getDerivation();
+                        addressOrParams = {
+                            protocolID: derivation.protocolID,
+                            keyID: derivation.keyID,
+                            counterparty: 'self'
+                        };
+
+                        // Track derivation for customInstructions
+                        const [derivationPrefix, derivationSuffix] = derivation.keyID.split(' ');
+                        derivationInfo.push({
+                            outputIndex: i,
+                            derivationPrefix,
+                            derivationSuffix
+                        });
+                    }
+
                     if (isDerivationParams(addressOrParams)) {
                         lockingScript = await p2pkh.lock(addressOrParams);
                     } else {
@@ -1111,6 +1100,29 @@ export class TransactionTemplate {
             // Apply OP_RETURN data if specified for this output
             if (config.opReturnFields && config.opReturnFields.length > 0) {
                 lockingScript = addOpReturnData(lockingScript, config.opReturnFields);
+            }
+
+            // Build customInstructions: combine user-provided and auto-generated derivation instructions
+            const derivationForOutput = derivationInfo.find(d => d.outputIndex === i);
+            let finalCustomInstructions: string | undefined;
+
+            if (derivationForOutput) {
+                // We have auto-generated derivation instructions
+                const derivationInstructions = JSON.stringify({
+                    derivationPrefix: derivationForOutput.derivationPrefix,
+                    derivationSuffix: derivationForOutput.derivationSuffix
+                });
+
+                if (config.customInstructions) {
+                    // Concatenate user's custom instructions with derivation instructions
+                    finalCustomInstructions = config.customInstructions + derivationInstructions;
+                } else {
+                    // Only derivation instructions
+                    finalCustomInstructions = derivationInstructions;
+                }
+            } else if (config.customInstructions) {
+                // Only user-provided custom instructions
+                finalCustomInstructions = config.customInstructions;
             }
 
             // Handle change outputs specially - mark for auto-calculation during signing
@@ -1129,6 +1141,14 @@ export class TransactionTemplate {
                     satoshis: 0,  // Placeholder - will be updated after signing
                     outputDescription: config.description || "Change",
                 };
+                // Apply combined customInstructions (user + derivation)
+                if (finalCustomInstructions) {
+                    output.customInstructions = finalCustomInstructions;
+                }
+                // Apply basket if set
+                if (config.basket) {
+                    output.basket = config.basket;
+                }
                 actionOutputs.push(output);
             } else {
                 // Regular output - add to both signing and action outputs
@@ -1137,6 +1157,14 @@ export class TransactionTemplate {
                     satoshis: config.satoshis!,  // Non-change outputs must have satoshis
                     outputDescription: config.description || "Transaction output",
                 };
+                // Apply final customInstructions (user + derivation)
+                if (finalCustomInstructions) {
+                    output.customInstructions = finalCustomInstructions;
+                }
+                // Apply basket if set
+                if (config.basket) {
+                    output.basket = config.basket;
+                }
 
                 // Build the output object for signing
                 const outputForSigning = {

@@ -18,4 +18,4 @@ export {
 export { type WalletDerivationParams } from './types/index.js'
 
 // Utilities
-export { makeWallet, calculatePreimage, addOpReturnData } from './utils/index.js'
+export { makeWallet, calculatePreimage, addOpReturnData, getDerivation } from './utils/index.js'

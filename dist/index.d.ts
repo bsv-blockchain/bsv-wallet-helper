@@ -1,3 +1,4 @@
+import * as _bsv_sdk from '@bsv/sdk';
 import { WalletProtocol, WalletCounterparty, ScriptTemplate, WalletInterface, LockingScript, Script, Transaction, UnlockingScript, CreateActionOptions, CreateActionResult, WalletClient } from '@bsv/sdk';
 
 /**
@@ -166,28 +167,36 @@ type OutputConfig = {
     type: 'p2pkh';
     satoshis: number;
     description?: string;
-    addressOrParams: string | WalletDerivationParams;
+    addressOrParams?: string | WalletDerivationParams;
     opReturnFields?: (string | number[])[];
+    basket?: string;
+    customInstructions?: string;
 } | {
     type: 'ordinalP2PKH';
     satoshis: number;
     description?: string;
-    addressOrParams: string | WalletDerivationParams;
+    addressOrParams?: string | WalletDerivationParams;
     inscription?: Inscription;
     metadata?: MAP;
     opReturnFields?: (string | number[])[];
+    basket?: string;
+    customInstructions?: string;
 } | {
     type: 'custom';
     satoshis: number;
     description?: string;
     lockingScript: LockingScript;
     opReturnFields?: (string | number[])[];
+    basket?: string;
+    customInstructions?: string;
 } | {
     type: 'change';
     satoshis?: number;
     description?: string;
-    addressOrParams: string | WalletDerivationParams;
+    addressOrParams?: string | WalletDerivationParams;
     opReturnFields?: (string | number[])[];
+    basket?: string;
+    customInstructions?: string;
 };
 /**
  * Builder class for configuring individual transaction inputs.
@@ -317,28 +326,42 @@ declare class OutputBuilder {
      */
     addOpReturn(fields: (string | number[])[]): this;
     /**
+     * Sets the basket for THIS output only.
+     *
+     * @param value - Basket name/identifier
+     * @returns This OutputBuilder for further output configuration
+     */
+    basket(value: string): this;
+    /**
+     * Sets custom instructions for THIS output only.
+     *
+     * @param value - Custom instructions (typically JSON string)
+     * @returns This OutputBuilder for further output configuration
+     */
+    customInstructions(value: string): this;
+    /**
      * Adds a P2PKH output to the transaction.
      *
-     * @param addressOrParams - Public key hex string or wallet derivation parameters
+     * @param addressOrParams - Public key hex string or wallet derivation parameters. If omitted, uses BRC-29 derivation scheme.
      * @param satoshis - Amount in satoshis for this output
      * @param description - Optional description for this output
      * @returns A new OutputBuilder for the new output
      */
-    addP2PKHOutput(addressOrParams: string | WalletDerivationParams, satoshis: number, description?: string): OutputBuilder;
+    addP2PKHOutput(addressOrParams: string | WalletDerivationParams | undefined, satoshis: number, description?: string): OutputBuilder;
     /**
      * Adds a change output that automatically calculates the change amount.
      *
-     * @param addressOrParams - Public key hex or wallet derivation parameters
+     * @param addressOrParams - Public key hex or wallet derivation parameters. If omitted, uses BRC-29 derivation scheme.
      * @param description - Optional description for this output
      * @returns A new OutputBuilder for the new output
      */
-    addChangeOutput(addressOrParams: string | WalletDerivationParams, description?: string): OutputBuilder;
+    addChangeOutput(addressOrParams?: string | WalletDerivationParams, description?: string): OutputBuilder;
     /**
      * Adds a P2PKH input to the transaction.
      *
      * @param sourceTransaction - The source transaction containing the output to spend
      * @param sourceOutputIndex - The index of the output in the source transaction
-     * @param walletParams - Optional wallet derivation parameters (defaults to [2, 'p2pkh'], '0', 'self')
+     * @param walletParams - Optional wallet derivation parameters (defaults to BRC-29 derivation scheme with counterparty 'self')
      * @param description - Optional description for this input
      * @param signOutputs - Signature scope: 'all', 'none', or 'single' (default: 'all')
      * @param anyoneCanPay - Allow other inputs to be added later (default: false)
@@ -352,7 +375,7 @@ declare class OutputBuilder {
      *
      * @param sourceTransaction - The source transaction containing the output to spend
      * @param sourceOutputIndex - The index of the output in the source transaction
-     * @param walletParams - Optional wallet derivation parameters (defaults to [2, 'p2pkh'], '0', 'self')
+     * @param walletParams - Optional wallet derivation parameters (defaults to BRC-29 derivation scheme with counterparty 'self')
      * @param description - Optional description for this input
      * @param signOutputs - Signature scope: 'all', 'none', or 'single' (default: 'all')
      * @param anyoneCanPay - Allow other inputs to be added later (default: false)
@@ -455,7 +478,7 @@ declare class TransactionTemplate {
      *
      * @param sourceTransaction - The source transaction containing the output to spend
      * @param sourceOutputIndex - The index of the output in the source transaction
-     * @param walletParams - Optional wallet derivation parameters (defaults to [2, 'p2pkh'], '0', 'self')
+     * @param walletParams - Optional wallet derivation parameters (defaults to BRC-29 derivation scheme with counterparty 'self')
      * @param description - Optional description for this input
      * @param signOutputs - Signature scope: 'all', 'none', or 'single' (default: 'all')
      * @param anyoneCanPay - Allow other inputs to be added later (default: false)
@@ -469,7 +492,7 @@ declare class TransactionTemplate {
      *
      * @param sourceTransaction - The source transaction containing the output to spend
      * @param sourceOutputIndex - The index of the output in the source transaction
-     * @param walletParams - Optional wallet derivation parameters (defaults to [2, 'p2pkh'], '0', 'self')
+     * @param walletParams - Optional wallet derivation parameters (defaults to BRC-29 derivation scheme with counterparty 'self')
      * @param description - Optional description for this input
      * @param signOutputs - Signature scope: 'all', 'none', or 'single' (default: 'all')
      * @param anyoneCanPay - Allow other inputs to be added later (default: false)
@@ -493,33 +516,33 @@ declare class TransactionTemplate {
     /**
      * Adds a P2PKH (Pay To Public Key Hash) output to the transaction.
      *
-     * @param addressOrParams - Public key hex string or wallet derivation parameters (protocolID, keyID, counterparty)
+     * @param addressOrParams - Public key hex string or wallet derivation parameters. If omitted, uses BRC-29 derivation scheme.
      * @param satoshis - Amount in satoshis for this output
      * @param description - Optional description for this output
      * @returns An OutputBuilder for configuring this output (e.g., adding OP_RETURN)
      */
-    addP2PKHOutput(addressOrParams: string | WalletDerivationParams, satoshis: number, description?: string): OutputBuilder;
+    addP2PKHOutput(addressOrParams: string | WalletDerivationParams | undefined, satoshis: number, description?: string): OutputBuilder;
     /**
      * Adds a change output that automatically calculates the change amount during transaction signing.
      *
      * The satoshi amount is calculated as: inputs - outputs - fees
      *
-     * @param addressOrParams - Public key hex string or wallet derivation parameters for receiving change
+     * @param addressOrParams - Public key hex string or wallet derivation parameters. If omitted, uses BRC-29 derivation scheme.
      * @param description - Optional description for this output (default: "Change")
      * @returns An OutputBuilder for configuring this output (e.g., adding OP_RETURN)
      */
-    addChangeOutput(addressOrParams: string | WalletDerivationParams, description?: string): OutputBuilder;
+    addChangeOutput(addressOrParams?: string | WalletDerivationParams, description?: string): OutputBuilder;
     /**
      * Adds an ordinalP2PKH (1Sat Ordinal + P2PKH) output to the transaction.
      *
-     * @param addressOrParams - Public key hex string or wallet derivation parameters (protocolID, keyID, counterparty)
+     * @param addressOrParams - Public key hex string or wallet derivation parameters. If omitted, uses BRC-29 derivation scheme.
      * @param satoshis - Amount in satoshis for this output (typically 1 for ordinals)
      * @param inscription - Optional inscription data with base64 file data and content type
      * @param metadata - Optional MAP metadata with app, type, and custom properties
      * @param description - Optional description for this output
      * @returns An OutputBuilder for configuring this output (e.g., adding OP_RETURN)
      */
-    addOrdinalP2PKHOutput(addressOrParams: string | WalletDerivationParams, satoshis: number, inscription?: Inscription, metadata?: MAP, description?: string): OutputBuilder;
+    addOrdinalP2PKHOutput(addressOrParams: string | WalletDerivationParams | undefined, satoshis: number, inscription?: Inscription, metadata?: MAP, description?: string): OutputBuilder;
     /**
      * Adds a custom output with a pre-built locking script.
      *
@@ -583,4 +606,9 @@ declare function calculatePreimage(tx: Transaction, inputIndex: number, signOutp
  */
 declare const addOpReturnData: (script: LockingScript, fields: (string | number[])[]) => LockingScript;
 
-export { type BuildParams, InputBuilder, type Inscription, type MAP, OutputBuilder, TransactionTemplate, type WalletDerivationParams, OrdP2PKH as WalletOrdP2PKH, P2PKH as WalletP2PKH, addOpReturnData, calculatePreimage, makeWallet };
+declare function getDerivation(): {
+    protocolID: _bsv_sdk.WalletProtocol;
+    keyID: string;
+};
+
+export { type BuildParams, InputBuilder, type Inscription, type MAP, OutputBuilder, TransactionTemplate, type WalletDerivationParams, OrdP2PKH as WalletOrdP2PKH, P2PKH as WalletP2PKH, addOpReturnData, calculatePreimage, getDerivation, makeWallet };

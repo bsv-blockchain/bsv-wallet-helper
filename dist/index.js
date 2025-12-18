@@ -27,6 +27,7 @@ __export(index_exports, {
   WalletP2PKH: () => P2PKH,
   addOpReturnData: () => addOpReturnData,
   calculatePreimage: () => calculatePreimage,
+  getDerivation: () => getDerivation,
   makeWallet: () => makeWallet
 });
 module.exports = __toCommonJS(index_exports);
@@ -303,7 +304,7 @@ var OrdP2PKH = class {
    * @param lockingScript - Optional. The locking script being unlocked. Otherwise input.sourceTransaction is required.
    * @returns An object containing the `sign` and `estimateLength` functions
    */
-  unlock(protocolID = [2, "p2pkh"], keyID = "0", counterparty = "self", signOutputs = "all", anyoneCanPay = false, sourceSatoshis, lockingScript) {
+  unlock(protocolID, keyID, counterparty = "self", signOutputs = "all", anyoneCanPay = false, sourceSatoshis, lockingScript) {
     return this.p2pkh.unlock(
       protocolID,
       keyID,
@@ -350,10 +351,44 @@ var applyInscription = (lockingScript, inscription, metaData, withSeparator = fa
 };
 
 // src/transaction-template/transaction.ts
-var import_sdk5 = require("@bsv/sdk");
+var import_sdk7 = require("@bsv/sdk");
+
+// src/utils/mockWallet.ts
+var import_sdk4 = require("@bsv/sdk");
+var import_wallet_toolbox_client = require("@bsv/wallet-toolbox-client");
+async function makeWallet(chain, storageURL, privateKey) {
+  if (!chain) {
+    throw new Error('chain parameter is required (must be "test" or "main")');
+  }
+  if (chain !== "test" && chain !== "main") {
+    throw new Error(`Invalid chain "${chain}". Must be "test" or "main"`);
+  }
+  if (!storageURL) {
+    throw new Error("storageURL parameter is required");
+  }
+  if (!privateKey) {
+    throw new Error("privateKey parameter is required");
+  }
+  try {
+    const keyDeriver = new import_sdk4.KeyDeriver(new import_sdk4.PrivateKey(privateKey, "hex"));
+    const storageManager = new import_wallet_toolbox_client.WalletStorageManager(keyDeriver.identityKey);
+    const signer = new import_wallet_toolbox_client.WalletSigner(chain, keyDeriver, storageManager);
+    const services = new import_wallet_toolbox_client.Services(chain);
+    const wallet = new import_wallet_toolbox_client.Wallet(signer, services);
+    const client = new import_wallet_toolbox_client.StorageClient(wallet, storageURL);
+    await client.makeAvailable();
+    await storageManager.addWalletStorageProvider(client);
+    return wallet;
+  } catch (error) {
+    if (error instanceof Error) {
+      throw new Error(`Failed to create wallet: ${error.message}`);
+    }
+    throw new Error("Failed to create wallet: Unknown error");
+  }
+}
 
 // src/utils/opreturn.ts
-var import_sdk4 = require("@bsv/sdk");
+var import_sdk5 = require("@bsv/sdk");
 var isHex = (str) => {
   if (str.length === 0) return true;
   if (str.length % 2 !== 0) return false;
@@ -361,12 +396,12 @@ var isHex = (str) => {
 };
 var toHexField = (field) => {
   if (Array.isArray(field)) {
-    return import_sdk4.Utils.toHex(field);
+    return import_sdk5.Utils.toHex(field);
   }
   if (isHex(field)) {
     return field.toLowerCase();
   }
-  return import_sdk4.Utils.toHex(import_sdk4.Utils.toArray(field));
+  return import_sdk5.Utils.toHex(import_sdk5.Utils.toArray(field));
 };
 var addOpReturnData = (script, fields) => {
   if (!script || typeof script.toASM !== "function") {
@@ -406,8 +441,20 @@ var addOpReturnData = (script, fields) => {
   const baseAsm = script.toASM();
   const dataFieldsAsm = hexFields.join(" ");
   const fullAsm = `${baseAsm} OP_RETURN ${dataFieldsAsm}`;
-  return import_sdk4.LockingScript.fromASM(fullAsm);
+  return import_sdk5.LockingScript.fromASM(fullAsm);
 };
+
+// src/utils/derivation.ts
+var import_wallet_toolbox_client2 = require("@bsv/wallet-toolbox-client");
+var import_sdk6 = require("@bsv/sdk");
+function getDerivation() {
+  const derivationPrefix = import_sdk6.Utils.toBase64((0, import_sdk6.Random)(8));
+  const derivationSuffix = import_sdk6.Utils.toBase64((0, import_sdk6.Random)(8));
+  return {
+    protocolID: import_wallet_toolbox_client2.brc29ProtocolID,
+    keyID: derivationPrefix + " " + derivationSuffix
+  };
+}
 
 // src/transaction-template/transaction.ts
 function isDerivationParams(value) {
@@ -585,9 +632,35 @@ var OutputBuilder = class {
     return this;
   }
   /**
+   * Sets the basket for THIS output only.
+   *
+   * @param value - Basket name/identifier
+   * @returns This OutputBuilder for further output configuration
+   */
+  basket(value) {
+    if (typeof value !== "string" || value.length === 0) {
+      throw new Error("basket requires a non-empty string");
+    }
+    this.outputConfig.basket = value;
+    return this;
+  }
+  /**
+   * Sets custom instructions for THIS output only.
+   *
+   * @param value - Custom instructions (typically JSON string)
+   * @returns This OutputBuilder for further output configuration
+   */
+  customInstructions(value) {
+    if (typeof value !== "string" || value.length === 0) {
+      throw new Error("customInstructions requires a non-empty string");
+    }
+    this.outputConfig.customInstructions = value;
+    return this;
+  }
+  /**
    * Adds a P2PKH output to the transaction.
    *
-   * @param addressOrParams - Public key hex string or wallet derivation parameters
+   * @param addressOrParams - Public key hex string or wallet derivation parameters. If omitted, uses BRC-29 derivation scheme.
    * @param satoshis - Amount in satoshis for this output
    * @param description - Optional description for this output
    * @returns A new OutputBuilder for the new output
@@ -602,7 +675,7 @@ var OutputBuilder = class {
   /**
    * Adds a change output that automatically calculates the change amount.
    *
-   * @param addressOrParams - Public key hex or wallet derivation parameters
+   * @param addressOrParams - Public key hex or wallet derivation parameters. If omitted, uses BRC-29 derivation scheme.
    * @param description - Optional description for this output
    * @returns A new OutputBuilder for the new output
    */
@@ -614,7 +687,7 @@ var OutputBuilder = class {
    *
    * @param sourceTransaction - The source transaction containing the output to spend
    * @param sourceOutputIndex - The index of the output in the source transaction
-   * @param walletParams - Optional wallet derivation parameters (defaults to [2, 'p2pkh'], '0', 'self')
+   * @param walletParams - Optional wallet derivation parameters (defaults to BRC-29 derivation scheme with counterparty 'self')
    * @param description - Optional description for this input
    * @param signOutputs - Signature scope: 'all', 'none', or 'single' (default: 'all')
    * @param anyoneCanPay - Allow other inputs to be added later (default: false)
@@ -639,7 +712,7 @@ var OutputBuilder = class {
    *
    * @param sourceTransaction - The source transaction containing the output to spend
    * @param sourceOutputIndex - The index of the output in the source transaction
-   * @param walletParams - Optional wallet derivation parameters (defaults to [2, 'p2pkh'], '0', 'self')
+   * @param walletParams - Optional wallet derivation parameters (defaults to BRC-29 derivation scheme with counterparty 'self')
    * @param description - Optional description for this input
    * @param signOutputs - Signature scope: 'all', 'none', or 'single' (default: 'all')
    * @param anyoneCanPay - Allow other inputs to be added later (default: false)
@@ -845,7 +918,7 @@ var TransactionTemplate = class {
    *
    * @param sourceTransaction - The source transaction containing the output to spend
    * @param sourceOutputIndex - The index of the output in the source transaction
-   * @param walletParams - Optional wallet derivation parameters (defaults to [2, 'p2pkh'], '0', 'self')
+   * @param walletParams - Optional wallet derivation parameters (defaults to BRC-29 derivation scheme with counterparty 'self')
    * @param description - Optional description for this input
    * @param signOutputs - Signature scope: 'all', 'none', or 'single' (default: 'all')
    * @param anyoneCanPay - Allow other inputs to be added later (default: false)
@@ -879,7 +952,7 @@ var TransactionTemplate = class {
    *
    * @param sourceTransaction - The source transaction containing the output to spend
    * @param sourceOutputIndex - The index of the output in the source transaction
-   * @param walletParams - Optional wallet derivation parameters (defaults to [2, 'p2pkh'], '0', 'self')
+   * @param walletParams - Optional wallet derivation parameters (defaults to BRC-29 derivation scheme with counterparty 'self')
    * @param description - Optional description for this input
    * @param signOutputs - Signature scope: 'all', 'none', or 'single' (default: 'all')
    * @param anyoneCanPay - Allow other inputs to be added later (default: false)
@@ -944,15 +1017,12 @@ var TransactionTemplate = class {
   /**
    * Adds a P2PKH (Pay To Public Key Hash) output to the transaction.
    *
-   * @param addressOrParams - Public key hex string or wallet derivation parameters (protocolID, keyID, counterparty)
+   * @param addressOrParams - Public key hex string or wallet derivation parameters. If omitted, uses BRC-29 derivation scheme.
    * @param satoshis - Amount in satoshis for this output
    * @param description - Optional description for this output
    * @returns An OutputBuilder for configuring this output (e.g., adding OP_RETURN)
    */
   addP2PKHOutput(addressOrParams, satoshis, description) {
-    if (!addressOrParams) {
-      throw new Error("addressOrParams is required for P2PKH output");
-    }
     if (typeof satoshis !== "number" || satoshis < 0) {
       throw new Error("satoshis must be a non-negative number");
     }
@@ -973,14 +1043,11 @@ var TransactionTemplate = class {
    *
    * The satoshi amount is calculated as: inputs - outputs - fees
    *
-   * @param addressOrParams - Public key hex string or wallet derivation parameters for receiving change
+   * @param addressOrParams - Public key hex string or wallet derivation parameters. If omitted, uses BRC-29 derivation scheme.
    * @param description - Optional description for this output (default: "Change")
    * @returns An OutputBuilder for configuring this output (e.g., adding OP_RETURN)
    */
   addChangeOutput(addressOrParams, description) {
-    if (!addressOrParams) {
-      throw new Error("addressOrParams is required for change output");
-    }
     if (description !== void 0 && typeof description !== "string") {
       throw new Error("description must be a string");
     }
@@ -995,7 +1062,7 @@ var TransactionTemplate = class {
   /**
    * Adds an ordinalP2PKH (1Sat Ordinal + P2PKH) output to the transaction.
    *
-   * @param addressOrParams - Public key hex string or wallet derivation parameters (protocolID, keyID, counterparty)
+   * @param addressOrParams - Public key hex string or wallet derivation parameters. If omitted, uses BRC-29 derivation scheme.
    * @param satoshis - Amount in satoshis for this output (typically 1 for ordinals)
    * @param inscription - Optional inscription data with base64 file data and content type
    * @param metadata - Optional MAP metadata with app, type, and custom properties
@@ -1003,9 +1070,6 @@ var TransactionTemplate = class {
    * @returns An OutputBuilder for configuring this output (e.g., adding OP_RETURN)
    */
   addOrdinalP2PKHOutput(addressOrParams, satoshis, inscription, metadata, description) {
-    if (!addressOrParams) {
-      throw new Error("addressOrParams is required for ordinalP2PKH output");
-    }
     if (typeof satoshis !== "number" || satoshis < 0) {
       throw new Error("satoshis must be a non-negative number");
     }
@@ -1072,6 +1136,7 @@ var TransactionTemplate = class {
     if (hasChangeOutputs && this.inputs.length === 0) {
       throw new Error("Change outputs require at least one input");
     }
+    const derivationInfo = [];
     const actionInputsConfig = [];
     const signingInputs = [];
     for (let i = 0; i < this.inputs.length; i++) {
@@ -1081,17 +1146,13 @@ var TransactionTemplate = class {
         case "p2pkh":
         case "ordinalP2PKH": {
           const p2pkh = new P2PKH(this.wallet);
-          const walletParams = config.walletParams || {
-            protocolID: [2, "p2pkh"],
-            keyID: "0",
-            counterparty: "self"
-          };
+          const walletParams = config.walletParams;
           unlockingScriptTemplate = p2pkh.unlock(
-            walletParams.protocolID,
-            walletParams.keyID,
-            walletParams.counterparty,
-            config.signOutputs || "all",
-            config.anyoneCanPay || false
+            walletParams?.protocolID,
+            walletParams?.keyID,
+            walletParams?.counterparty,
+            config.signOutputs,
+            config.anyoneCanPay
           );
           break;
         }
@@ -1124,7 +1185,21 @@ var TransactionTemplate = class {
       switch (config.type) {
         case "p2pkh": {
           const p2pkh = new P2PKH(this.wallet);
-          const addressOrParams = config.addressOrParams;
+          let addressOrParams = config.addressOrParams;
+          if (!addressOrParams) {
+            const derivation = getDerivation();
+            addressOrParams = {
+              protocolID: derivation.protocolID,
+              keyID: derivation.keyID,
+              counterparty: "self"
+            };
+            const [derivationPrefix, derivationSuffix] = derivation.keyID.split(" ");
+            derivationInfo.push({
+              outputIndex: i,
+              derivationPrefix,
+              derivationSuffix
+            });
+          }
           if (isDerivationParams(addressOrParams)) {
             lockingScript = await p2pkh.lock(addressOrParams);
           } else {
@@ -1134,7 +1209,21 @@ var TransactionTemplate = class {
         }
         case "ordinalP2PKH": {
           const ordinal = new OrdP2PKH(this.wallet);
-          const addressOrParams = config.addressOrParams;
+          let addressOrParams = config.addressOrParams;
+          if (!addressOrParams) {
+            const derivation = getDerivation();
+            addressOrParams = {
+              protocolID: derivation.protocolID,
+              keyID: derivation.keyID,
+              counterparty: "self"
+            };
+            const [derivationPrefix, derivationSuffix] = derivation.keyID.split(" ");
+            derivationInfo.push({
+              outputIndex: i,
+              derivationPrefix,
+              derivationSuffix
+            });
+          }
           if (isDerivationParams(addressOrParams)) {
             lockingScript = await ordinal.lock(addressOrParams, config.inscription, config.metadata);
           } else {
@@ -1148,7 +1237,21 @@ var TransactionTemplate = class {
         }
         case "change": {
           const p2pkh = new P2PKH(this.wallet);
-          const addressOrParams = config.addressOrParams;
+          let addressOrParams = config.addressOrParams;
+          if (!addressOrParams) {
+            const derivation = getDerivation();
+            addressOrParams = {
+              protocolID: derivation.protocolID,
+              keyID: derivation.keyID,
+              counterparty: "self"
+            };
+            const [derivationPrefix, derivationSuffix] = derivation.keyID.split(" ");
+            derivationInfo.push({
+              outputIndex: i,
+              derivationPrefix,
+              derivationSuffix
+            });
+          }
           if (isDerivationParams(addressOrParams)) {
             lockingScript = await p2pkh.lock(addressOrParams);
           } else {
@@ -1163,6 +1266,21 @@ var TransactionTemplate = class {
       if (config.opReturnFields && config.opReturnFields.length > 0) {
         lockingScript = addOpReturnData(lockingScript, config.opReturnFields);
       }
+      const derivationForOutput = derivationInfo.find((d) => d.outputIndex === i);
+      let finalCustomInstructions;
+      if (derivationForOutput) {
+        const derivationInstructions = JSON.stringify({
+          derivationPrefix: derivationForOutput.derivationPrefix,
+          derivationSuffix: derivationForOutput.derivationSuffix
+        });
+        if (config.customInstructions) {
+          finalCustomInstructions = config.customInstructions + derivationInstructions;
+        } else {
+          finalCustomInstructions = derivationInstructions;
+        }
+      } else if (config.customInstructions) {
+        finalCustomInstructions = config.customInstructions;
+      }
       if (config.type === "change") {
         const outputForSigning = {
           lockingScript,
@@ -1176,6 +1294,12 @@ var TransactionTemplate = class {
           // Placeholder - will be updated after signing
           outputDescription: config.description || "Change"
         };
+        if (finalCustomInstructions) {
+          output.customInstructions = finalCustomInstructions;
+        }
+        if (config.basket) {
+          output.basket = config.basket;
+        }
         actionOutputs.push(output);
       } else {
         const output = {
@@ -1184,6 +1308,12 @@ var TransactionTemplate = class {
           // Non-change outputs must have satoshis
           outputDescription: config.description || "Transaction output"
         };
+        if (finalCustomInstructions) {
+          output.customInstructions = finalCustomInstructions;
+        }
+        if (config.basket) {
+          output.basket = config.basket;
+        }
         const outputForSigning = {
           lockingScript,
           satoshis: config.satoshis
@@ -1198,7 +1328,7 @@ var TransactionTemplate = class {
     const actionInputs = [];
     let inputBEEF;
     if (signingInputs.length > 0) {
-      const tx = new import_sdk5.Transaction();
+      const tx = new import_sdk7.Transaction();
       signingInputs.forEach((input) => {
         tx.addInput(input);
       });
@@ -1215,7 +1345,7 @@ var TransactionTemplate = class {
           });
         }
       });
-      await tx.fee(new import_sdk5.SatoshisPerKilobyte(DEFAULT_SAT_PER_KB));
+      await tx.fee(new import_sdk7.SatoshisPerKilobyte(DEFAULT_SAT_PER_KB));
       await tx.sign();
       for (let i = 0; i < actionInputsConfig.length; i++) {
         const config = actionInputsConfig[i];
@@ -1245,7 +1375,7 @@ var TransactionTemplate = class {
       if (signingInputs.length === 1) {
         inputBEEF = signingInputs[0].sourceTransaction.toBEEF();
       } else {
-        const mergedBeef = new import_sdk5.Beef();
+        const mergedBeef = new import_sdk7.Beef();
         signingInputs.forEach((input) => {
           const beef = input.sourceTransaction.toBEEF();
           mergedBeef.mergeBeef(beef);
@@ -1270,40 +1400,6 @@ var TransactionTemplate = class {
     };
   }
 };
-
-// src/utils/mockWallet.ts
-var import_sdk6 = require("@bsv/sdk");
-var import_wallet_toolbox_client = require("@bsv/wallet-toolbox-client");
-async function makeWallet(chain, storageURL, privateKey) {
-  if (!chain) {
-    throw new Error('chain parameter is required (must be "test" or "main")');
-  }
-  if (chain !== "test" && chain !== "main") {
-    throw new Error(`Invalid chain "${chain}". Must be "test" or "main"`);
-  }
-  if (!storageURL) {
-    throw new Error("storageURL parameter is required");
-  }
-  if (!privateKey) {
-    throw new Error("privateKey parameter is required");
-  }
-  try {
-    const keyDeriver = new import_sdk6.KeyDeriver(new import_sdk6.PrivateKey(privateKey, "hex"));
-    const storageManager = new import_wallet_toolbox_client.WalletStorageManager(keyDeriver.identityKey);
-    const signer = new import_wallet_toolbox_client.WalletSigner(chain, keyDeriver, storageManager);
-    const services = new import_wallet_toolbox_client.Services(chain);
-    const wallet = new import_wallet_toolbox_client.Wallet(signer, services);
-    const client = new import_wallet_toolbox_client.StorageClient(wallet, storageURL);
-    await client.makeAvailable();
-    await storageManager.addWalletStorageProvider(client);
-    return wallet;
-  } catch (error) {
-    if (error instanceof Error) {
-      throw new Error(`Failed to create wallet: ${error.message}`);
-    }
-    throw new Error("Failed to create wallet: Unknown error");
-  }
-}
 // Annotate the CommonJS export names for ESM import in node:
 0 && (module.exports = {
   InputBuilder,
@@ -1313,5 +1409,6 @@ async function makeWallet(chain, storageURL, privateKey) {
   WalletP2PKH,
   addOpReturnData,
   calculatePreimage,
+  getDerivation,
   makeWallet
 });
