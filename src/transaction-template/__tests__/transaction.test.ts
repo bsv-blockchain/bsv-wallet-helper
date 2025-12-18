@@ -63,7 +63,7 @@ describe('TransactionTemplate', () => {
       const publicKey = privateKey.toPublicKey().toString();
 
       const template = new TransactionTemplate(wallet)
-        .addP2PKHOutput(publicKey, 1000, "Test output");
+        .addP2PKHOutput({ publicKey, satoshis: 1000, description: "Test output" });
 
       expect(template).toBeDefined();
 
@@ -80,14 +80,14 @@ describe('TransactionTemplate', () => {
       const privateKey = new PrivateKey(4);
       const wallet = await makeWallet('test', storageURL, privateKey.toHex());
 
-      const params = {
+      const walletParams = {
         protocolID: [2, 'p2pkh'] as WalletProtocol,
         keyID: '0',
         counterparty: 'self' as WalletCounterparty,
       };
 
       const template = new TransactionTemplate(wallet)
-        .addP2PKHOutput(params, 1000, "Test output");
+        .addP2PKHOutput({ walletParams, satoshis: 1000, description: "Test output" });
 
       expect(template).toBeDefined();
 
@@ -97,16 +97,16 @@ describe('TransactionTemplate', () => {
       expect(outputs[0].type).toBe('p2pkh');
       expect(outputs[0].satoshis).toBe(1000);
       expect(outputs[0].description).toBe("Test output");
-      expect(outputs[0].addressOrParams).toEqual(params);
+      expect(outputs[0].addressOrParams).toEqual(walletParams);
     });
 
-    test('should allow undefined addressOrParams (uses BRC-29 derivation)', async () => {
+    test('should allow auto-derivation (uses BRC-29 derivation)', async () => {
       const privateKey = new PrivateKey(5);
       const wallet = await makeWallet('test', storageURL, privateKey.toHex());
 
       // Should not throw - will use BRC-29 derivation
       expect(() => {
-        new TransactionTemplate(wallet).addP2PKHOutput(undefined, 1000);
+        new TransactionTemplate(wallet).addP2PKHOutput({ satoshis: 1000 });
       }).not.toThrow();
     });
 
@@ -116,7 +116,7 @@ describe('TransactionTemplate', () => {
       const publicKey = privateKey.toPublicKey().toString();
 
       expect(() => {
-        new TransactionTemplate(wallet).addP2PKHOutput(publicKey, -100);
+        new TransactionTemplate(wallet).addP2PKHOutput({ publicKey, satoshis: -100 });
       }).toThrow('satoshis must be a non-negative number');
     });
 
@@ -127,7 +127,7 @@ describe('TransactionTemplate', () => {
 
       expect(() => {
         // @ts-ignore - intentionally testing invalid input
-        new TransactionTemplate(wallet).addP2PKHOutput(publicKey, 1000, 123);
+        new TransactionTemplate(wallet).addP2PKHOutput({ publicKey, satoshis: 1000, description: 123 });
       }).toThrow('description must be a string');
     });
   });
@@ -139,7 +139,7 @@ describe('TransactionTemplate', () => {
       const lockingScript = LockingScript.fromASM('OP_TRUE');
 
       const template = new TransactionTemplate(wallet)
-        .addCustomOutput(lockingScript, 1000, "Custom output");
+        .addCustomOutput({ lockingScript, satoshis: 1000, description: "Custom output" });
 
       expect(template).toBeDefined();
 
@@ -158,7 +158,7 @@ describe('TransactionTemplate', () => {
 
       expect(() => {
         // @ts-ignore - intentionally testing invalid input
-        new TransactionTemplate(wallet).addCustomOutput(null, 1000);
+        new TransactionTemplate(wallet).addCustomOutput({ lockingScript: null, satoshis: 1000 });
       }).toThrow('lockingScript must be a LockingScript instance');
     });
   });
@@ -170,7 +170,7 @@ describe('TransactionTemplate', () => {
       const publicKey = privateKey.toPublicKey().toString();
 
       const template = new TransactionTemplate(wallet)
-        .addP2PKHOutput(publicKey, 1, "Test output")
+        .addP2PKHOutput({ publicKey, satoshis: 1, description: "Test output" })
           .addOpReturn(['hello world']);
 
       expect(template).toBeDefined();
@@ -188,7 +188,7 @@ describe('TransactionTemplate', () => {
 
       expect(() => {
         new TransactionTemplate(wallet)
-          .addP2PKHOutput(publicKey, 1, "Test output")
+          .addP2PKHOutput({ publicKey, satoshis: 1, description: "Test output" })
             .addOpReturn([]);
       }).toThrow('addOpReturn requires a non-empty array of fields');
     });
@@ -200,7 +200,7 @@ describe('TransactionTemplate', () => {
 
       expect(() => {
         new TransactionTemplate(wallet)
-          .addP2PKHOutput(publicKey, 1, "Test output")
+          .addP2PKHOutput({ publicKey, satoshis: 1, description: "Test output" })
             // @ts-ignore - intentionally testing invalid input
             .addOpReturn('hello');
       }).toThrow('addOpReturn requires a non-empty array of fields');
@@ -214,9 +214,9 @@ describe('TransactionTemplate', () => {
       const publicKey = privateKey.toPublicKey().toString();
 
       const template = new TransactionTemplate(wallet, "Multi-output transaction")
-        .addP2PKHOutput(publicKey, 1000, "First output")
-        .addP2PKHOutput(publicKey, 2000, "Second output")
-        .addP2PKHOutput(publicKey, 3000, "Third output");
+        .addP2PKHOutput({ publicKey, satoshis: 1000, description: "First output" })
+        .addP2PKHOutput({ publicKey, satoshis: 2000, description: "Second output" })
+        .addP2PKHOutput({ publicKey, satoshis: 3000, description: "Third output" });
 
       expect(template).toBeDefined();
 
@@ -237,9 +237,9 @@ describe('TransactionTemplate', () => {
       const publicKey = privateKey.toPublicKey().toString();
 
       const template = new TransactionTemplate(wallet)
-        .addP2PKHOutput(publicKey, 1000, "First output")
+        .addP2PKHOutput({ publicKey, satoshis: 1000, description: "First output" })
           .addOpReturn(['metadata1'])
-        .addP2PKHOutput(publicKey, 2000, "Second output")
+        .addP2PKHOutput({ publicKey, satoshis: 2000, description: "Second output" })
           .addOpReturn(['metadata2']);
 
       expect(template).toBeDefined();
@@ -260,9 +260,9 @@ describe('TransactionTemplate', () => {
       const lockingScript = LockingScript.fromASM('OP_TRUE');
 
       const template = new TransactionTemplate(wallet)
-        .addP2PKHOutput(publicKey, 1000, "P2PKH output")
-        .addCustomOutput(lockingScript, 500, "Custom output")
-        .addP2PKHOutput(publicKey, 2000, "Another P2PKH");
+        .addP2PKHOutput({ publicKey, satoshis: 1000, description: "P2PKH output" })
+        .addCustomOutput({ lockingScript, satoshis: 500, description: "Custom output" })
+        .addP2PKHOutput({ publicKey, satoshis: 2000, description: "Another P2PKH" });
 
       expect(template).toBeDefined();
 
@@ -455,7 +455,7 @@ describe('TransactionTemplate', () => {
       wallet.createAction = mockCreateAction;
 
       const result = await new TransactionTemplate(wallet, "Test transaction")
-        .addP2PKHOutput(publicKey, 1000, "Test output")
+        .addP2PKHOutput({ publicKey, satoshis: 1000, description: "Test output" })
         .build();
 
       expect(mockCreateAction).toHaveBeenCalledTimes(1);
@@ -488,7 +488,7 @@ describe('TransactionTemplate', () => {
       });
 
       const outputBuilder = new TransactionTemplate(wallet)
-        .addP2PKHOutput(publicKey, 500);
+        .addP2PKHOutput({ publicKey, satoshis: 500 });
 
       // Verify internal configuration before build (access via .parent)
       const outputs = (outputBuilder as any).parent.outputs;
@@ -516,7 +516,7 @@ describe('TransactionTemplate', () => {
       wallet.createAction = mockCreateAction;
 
       await new TransactionTemplate(wallet)
-        .addP2PKHOutput(publicKey, 1000)
+        .addP2PKHOutput({ publicKey, satoshis: 1000 })
         .options({ randomizeOutputs: false })
         .build();
 
@@ -542,9 +542,9 @@ describe('TransactionTemplate', () => {
       const metadata = { key: "value" };
 
       await new TransactionTemplate(wallet, "Complex transaction")
-        .addP2PKHOutput(publicKey, 1000, "First output")
+        .addP2PKHOutput({ publicKey, satoshis: 1000, description: "First output" })
           .addOpReturn([JSON.stringify(metadata)])
-        .addP2PKHOutput(publicKey, 2000, "Second output")
+        .addP2PKHOutput({ publicKey, satoshis: 2000, description: "Second output" })
         .options({ randomizeOutputs: false })
         .build();
 
@@ -579,8 +579,8 @@ describe('TransactionTemplate', () => {
       wallet.createAction = mockCreateAction;
 
       await new TransactionTemplate(wallet)
-        .addP2PKHOutput(publicKey, 1000, "Without OP_RETURN")
-        .addP2PKHOutput(publicKey, 1, "With OP_RETURN")
+        .addP2PKHOutput({ publicKey, satoshis: 1000, description: "Without OP_RETURN" })
+        .addP2PKHOutput({ publicKey, satoshis: 1, description: "With OP_RETURN" })
           .addOpReturn(['metadata'])
         .build();
 
@@ -607,7 +607,7 @@ describe('TransactionTemplate', () => {
       wallet.createAction = mockCreateAction;
 
       await new TransactionTemplate(wallet)
-        .addP2PKHOutput(publicKey, 1000)
+        .addP2PKHOutput({ publicKey, satoshis: 1000 })
         .build();
 
       expect(mockCreateAction).toHaveBeenCalledWith({
@@ -635,7 +635,7 @@ describe('TransactionTemplate', () => {
 
       // This should match the simplified API from the user's example
       const template = new TransactionTemplate(wallet, "P2PKH with metadata")
-        .addP2PKHOutput(publicKey, 1, "Testing P2PKH")
+        .addP2PKHOutput({ publicKey, satoshis: 1, description: "Testing P2PKH" })
           .addOpReturn([JSON.stringify(metadata)]);
 
       // Verify internal configuration before build
@@ -672,7 +672,7 @@ describe('TransactionTemplate', () => {
       };
 
       const outputBuilder = new TransactionTemplate(wallet, "Wallet derivation test")
-        .addP2PKHOutput(params, 5000, "Derived output");
+        .addP2PKHOutput({ walletParams: params, satoshis: 5000, description: "Derived output" });
 
       // Verify internal configuration before build (access via .parent)
       expect((outputBuilder as any).parent._transactionDescription).toBe("Wallet derivation test");
@@ -697,7 +697,7 @@ describe('TransactionTemplate', () => {
       const publicKey = privateKey.toPublicKey().toString();
 
       const template = new TransactionTemplate(wallet, "Preview test")
-        .addP2PKHOutput(publicKey, 1000, "Test output");
+        .addP2PKHOutput({ publicKey, satoshis: 1000, description: "Test output" });
 
       const preview = await template.build({ preview: true }) as any;
 
@@ -722,7 +722,7 @@ describe('TransactionTemplate', () => {
       const publicKey = privateKey.toPublicKey().toString();
 
       const preview = await new TransactionTemplate(wallet, "Preview with options")
-        .addP2PKHOutput(publicKey, 500, "Output")
+        .addP2PKHOutput({ publicKey, satoshis: 500, description: "Output" })
         .options({ randomizeOutputs: false, trustSelf: 'known' })
         .build({ preview: true }) as any;
 
@@ -739,7 +739,7 @@ describe('TransactionTemplate', () => {
       const metadata = { action: "test", timestamp: Date.now() };
 
       const preview = await new TransactionTemplate(wallet)
-        .addP2PKHOutput(publicKey, 1, "With metadata")
+        .addP2PKHOutput({ publicKey, satoshis: 1, description: "With metadata" })
           .addOpReturn([JSON.stringify(metadata)])
         .build({ preview: true }) as any;
 
@@ -753,9 +753,9 @@ describe('TransactionTemplate', () => {
       const publicKey = privateKey.toPublicKey().toString();
 
       const preview = await new TransactionTemplate(wallet)
-        .addP2PKHOutput(publicKey, 1000, "First")
-        .addP2PKHOutput(publicKey, 2000, "Second")
-        .addP2PKHOutput(publicKey, 3000, "Third")
+        .addP2PKHOutput({ publicKey, satoshis: 1000, description: "First" })
+        .addP2PKHOutput({ publicKey, satoshis: 2000, description: "Second" })
+        .addP2PKHOutput({ publicKey, satoshis: 3000, description: "Third" })
         .build({ preview: true }) as any;
 
       expect(preview.outputs).toHaveLength(3);
@@ -782,7 +782,7 @@ describe('TransactionTemplate', () => {
       });
 
       const result = await new TransactionTemplate(wallet)
-        .addP2PKHOutput(publicKey, 1000)
+        .addP2PKHOutput({ publicKey, satoshis: 1000 })
         .build({ preview: false });
 
       // Should execute normally and return txid/tx
@@ -806,7 +806,7 @@ describe('TransactionTemplate', () => {
       });
 
       const result = await new TransactionTemplate(wallet)
-        .addP2PKHOutput(publicKey, 1000)
+        .addP2PKHOutput({ publicKey, satoshis: 1000 })
         .build(); // No parameter = default false
 
       // Should execute normally (backward compatible)
@@ -826,7 +826,7 @@ describe('TransactionTemplate', () => {
       const publicKey = privateKey.toPublicKey().toString();
 
       const template = new TransactionTemplate(wallet)
-        .addChangeOutput(publicKey, "Change output");
+        .addChangeOutput({ publicKey, description: "Change output" });
 
       expect(template).toBeDefined();
 
@@ -850,7 +850,7 @@ describe('TransactionTemplate', () => {
       };
 
       const template = new TransactionTemplate(wallet)
-        .addChangeOutput(params, "Change output");
+        .addChangeOutput({ walletParams: params, description: "Change output" });
 
       expect(template).toBeDefined();
 
@@ -869,7 +869,7 @@ describe('TransactionTemplate', () => {
       const publicKey = privateKey.toPublicKey().toString();
 
       const template = new TransactionTemplate(wallet)
-        .addChangeOutput(publicKey);
+        .addChangeOutput({ publicKey });
 
       expect(template).toBeDefined();
 
@@ -886,7 +886,7 @@ describe('TransactionTemplate', () => {
 
       // Should not throw - will use BRC-29 derivation
       expect(() => {
-        new TransactionTemplate(wallet).addChangeOutput(undefined);
+        new TransactionTemplate(wallet).addChangeOutput({});
       }).not.toThrow();
     });
 
@@ -897,7 +897,7 @@ describe('TransactionTemplate', () => {
 
       expect(() => {
         // @ts-ignore - intentionally testing invalid input
-        new TransactionTemplate(wallet).addChangeOutput(publicKey, 123);
+        new TransactionTemplate(wallet).addChangeOutput({ publicKey, description: 123 });
       }).toThrow('description must be a string');
     });
 
@@ -907,7 +907,7 @@ describe('TransactionTemplate', () => {
       const publicKey = privateKey.toPublicKey().toString();
 
       const template = new TransactionTemplate(wallet)
-        .addChangeOutput(publicKey, "Change with metadata")
+        .addChangeOutput({ publicKey, description: "Change with metadata" })
           .addOpReturn(['change', 'metadata']);
 
       expect(template).toBeDefined();
@@ -925,7 +925,7 @@ describe('TransactionTemplate', () => {
       const publicKey = privateKey.toPublicKey().toString();
 
       const template = new TransactionTemplate(wallet, "Change without inputs")
-        .addChangeOutput(publicKey);
+        .addChangeOutput({ publicKey });
 
       await expect(template.build()).rejects.toThrow(
         'Change outputs require at least one input'
@@ -938,8 +938,8 @@ describe('TransactionTemplate', () => {
       const publicKey = privateKey.toPublicKey().toString();
 
       const template = new TransactionTemplate(wallet)
-        .addChangeOutput(publicKey, "First change")
-        .addChangeOutput(publicKey, "Second change");
+        .addChangeOutput({ publicKey, description: "First change" })
+        .addChangeOutput({ publicKey, description: "Second change" });
 
       expect(template).toBeDefined();
 
@@ -958,9 +958,9 @@ describe('TransactionTemplate', () => {
       const publicKey = privateKey.toPublicKey().toString();
 
       const template = new TransactionTemplate(wallet)
-        .addP2PKHOutput(publicKey, 1000, "Regular output")
-        .addChangeOutput(publicKey, "Change output")
-        .addP2PKHOutput(publicKey, 2000, "Another regular");
+        .addP2PKHOutput({ publicKey, satoshis: 1000, description: "Regular output" })
+        .addChangeOutput({ publicKey, description: "Change output" })
+        .addP2PKHOutput({ publicKey, satoshis: 2000, description: "Another regular" });
 
       expect(template).toBeDefined();
 
@@ -993,7 +993,7 @@ describe('TransactionTemplate', () => {
 
       // Create source transaction
       const p2pkhLock = new P2PKH();
-      const lockingScript = await p2pkhLock.lock(publicKey);
+      const lockingScript = await p2pkhLock.lock({ publicKey });
 
       const sourceTransaction = new Transaction();
       sourceTransaction.addInput({
@@ -1012,13 +1012,13 @@ describe('TransactionTemplate', () => {
 
       // Create spending transaction using TransactionTemplate
       const result = await new TransactionTemplate(wallet, "Spending P2PKH")
-        .addP2PKHInput(
+        .addP2PKHInput({
           sourceTransaction,
-          0,
-          { protocolID, keyID, counterparty },
-          "Input from previous tx"
-        )
-        .addP2PKHOutput(publicKey, 1900, "Change output")
+          sourceOutputIndex: 0,
+          walletParams: { protocolID, keyID, counterparty },
+          description: "Input from previous tx"
+        })
+        .addP2PKHOutput({ publicKey, satoshis: 1900, description: "Change output" })
         .options({ trustSelf: 'known' })
         .build();
 
@@ -1042,7 +1042,7 @@ describe('TransactionTemplate', () => {
 
       // Create two source transactions
       const p2pkhLock = new P2PKH();
-      const lockingScript = await p2pkhLock.lock(publicKey);
+      const lockingScript = await p2pkhLock.lock({ publicKey });
 
       const sourceTx1 = new Transaction();
       sourceTx1.addInput({
@@ -1070,19 +1070,19 @@ describe('TransactionTemplate', () => {
 
       // Create spending transaction with multiple inputs
       const result = await new TransactionTemplate(wallet, "Multiple inputs")
-        .addP2PKHInput(
-          sourceTx1,
-          0,
-          { protocolID, keyID, counterparty },
-          "First input"
-        )
-        .addP2PKHInput(
-          sourceTx2,
-          0,
-          { protocolID, keyID, counterparty },
-          "Second input"
-        )
-        .addP2PKHOutput(publicKey, 2400, "Combined output")
+        .addP2PKHInput({
+          sourceTransaction: sourceTx1,
+          sourceOutputIndex: 0,
+          walletParams: { protocolID, keyID, counterparty },
+          description: "First input"
+        })
+        .addP2PKHInput({
+          sourceTransaction: sourceTx2,
+          sourceOutputIndex: 0,
+          walletParams: { protocolID, keyID, counterparty },
+          description: "Second input"
+        })
+        .addP2PKHOutput({ publicKey, satoshis: 2400, description: "Combined output" })
         .options({ trustSelf: 'known' })
         .build();
 
@@ -1110,7 +1110,7 @@ describe('TransactionTemplate', () => {
         dataB64: Buffer.from('Hello Ordinal').toString('base64'),
         contentType: 'text/plain'
       };
-      const lockingScript = await ordinalLock.lock(publicKey, inscription);
+      const lockingScript = await ordinalLock.lock({ publicKey, inscription });
 
       const sourceTransaction = new Transaction();
       sourceTransaction.addInput({
@@ -1134,13 +1134,13 @@ describe('TransactionTemplate', () => {
       };
 
       const result = await new TransactionTemplate(wallet, "Transfer ordinal")
-        .addOrdinalP2PKHInput(
+        .addOrdinalP2PKHInput({
           sourceTransaction,
-          0,
-          { protocolID, keyID, counterparty },
-          "Ordinal input"
-        )
-        .addOrdinalP2PKHOutput(publicKey, 1, newInscription, undefined, "Ordinal output")
+          sourceOutputIndex: 0,
+          walletParams: { protocolID, keyID, counterparty },
+          description: "Ordinal input"
+        })
+        .addOrdinalP2PKHOutput({ publicKey, satoshis: 1, inscription: newInscription, description: "Ordinal output" })
         .options({ trustSelf: 'known' })
         .build();
 
@@ -1164,7 +1164,7 @@ describe('TransactionTemplate', () => {
 
       // Create source transaction
       const p2pkhLock = new P2PKH();
-      const lockingScript = await p2pkhLock.lock(publicKey);
+      const lockingScript = await p2pkhLock.lock({ publicKey });
 
       const sourceTransaction = new Transaction();
       sourceTransaction.addInput({
@@ -1183,14 +1183,14 @@ describe('TransactionTemplate', () => {
 
       // Test complex chaining: input -> output -> input (different source) -> output
       const result = await new TransactionTemplate(wallet, "Complex chaining")
-        .addP2PKHInput(
+        .addP2PKHInput({
           sourceTransaction,
-          0,
-          { protocolID, keyID, counterparty },
-          "Main input"
-        )
-        .addP2PKHOutput(publicKey, 2000, "First output")
-        .addP2PKHOutput(publicKey, 2900, "Second output")
+          sourceOutputIndex: 0,
+          walletParams: { protocolID, keyID, counterparty },
+          description: "Main input"
+        })
+        .addP2PKHOutput({ publicKey, satoshis: 2000, description: "First output" })
+        .addP2PKHOutput({ publicKey, satoshis: 2900, description: "Second output" })
         .options({ trustSelf: 'known' })
         .build();
 
@@ -1214,7 +1214,7 @@ describe('TransactionTemplate', () => {
 
       // Create regular P2PKH source transaction
       const p2pkhLock = new P2PKH();
-      const p2pkhLockingScript = await p2pkhLock.lock(publicKey);
+      const p2pkhLockingScript = await p2pkhLock.lock({ publicKey });
 
       const p2pkhSource = new Transaction();
       p2pkhSource.addInput({
@@ -1237,7 +1237,7 @@ describe('TransactionTemplate', () => {
         dataB64: Buffer.from('NFT Data').toString('base64'),
         contentType: 'text/plain'
       };
-      const ordinalLockingScript = await ordinalLock.lock(publicKey, inscription);
+      const ordinalLockingScript = await ordinalLock.lock({ publicKey, inscription });
 
       const ordinalSource = new Transaction();
       ordinalSource.addInput({
@@ -1256,20 +1256,20 @@ describe('TransactionTemplate', () => {
 
       // Create transaction spending both types
       const result = await new TransactionTemplate(wallet, "Mixed inputs")
-        .addP2PKHInput(
-          p2pkhSource,
-          0,
-          { protocolID, keyID, counterparty },
-          "Regular P2PKH input"
-        )
-        .addOrdinalP2PKHInput(
-          ordinalSource,
-          0,
-          { protocolID, keyID, counterparty },
-          "Ordinal input"
-        )
-        .addP2PKHOutput(publicKey, 2900, "Change")
-        .addOrdinalP2PKHOutput(publicKey, 1, inscription, undefined, "Ordinal transfer")
+        .addP2PKHInput({
+          sourceTransaction: p2pkhSource,
+          sourceOutputIndex: 0,
+          walletParams: { protocolID, keyID, counterparty },
+          description: "Regular P2PKH input"
+        })
+        .addOrdinalP2PKHInput({
+          sourceTransaction: ordinalSource,
+          sourceOutputIndex: 0,
+          walletParams: { protocolID, keyID, counterparty },
+          description: "Ordinal input"
+        })
+        .addP2PKHOutput({ publicKey, satoshis: 2900, description: "Change" })
+        .addOrdinalP2PKHOutput({ publicKey, satoshis: 1, inscription, description: "Ordinal transfer" })
         .options({ trustSelf: 'known' })
         .build();
 
@@ -1293,7 +1293,7 @@ describe('TransactionTemplate', () => {
 
       // Create source transaction
       const p2pkhLock = new P2PKH();
-      const lockingScript = await p2pkhLock.lock(publicKey);
+      const lockingScript = await p2pkhLock.lock({ publicKey });
 
       const sourceTransaction = new Transaction();
       sourceTransaction.addInput({
@@ -1314,13 +1314,13 @@ describe('TransactionTemplate', () => {
 
       // Create spending transaction with metadata
       const result = await new TransactionTemplate(wallet, "Transfer with metadata")
-        .addP2PKHInput(
+        .addP2PKHInput({
           sourceTransaction,
-          0,
-          { protocolID, keyID, counterparty },
-          "Input"
-        )
-        .addP2PKHOutput(publicKey, 1900, "Output with metadata")
+          sourceOutputIndex: 0,
+          walletParams: { protocolID, keyID, counterparty },
+          description: "Input"
+        })
+        .addP2PKHOutput({ publicKey, satoshis: 1900, description: "Output with metadata" })
           .addOpReturn([JSON.stringify(metadata)])
         .options({ trustSelf: 'known' })
         .build();

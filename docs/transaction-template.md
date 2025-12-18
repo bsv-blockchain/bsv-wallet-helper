@@ -89,13 +89,13 @@ const result = await wallet.createAction({
 ```typescript
 // Clean, fluent, self-documenting - handles all the complexity!
 const result = await new TransactionTemplate(wallet, "My transaction")
-  .addP2PKHInput(
+  .addP2PKHInput({
     sourceTransaction,
-    0,
-    { protocolID: [2, 'p2pkh'], keyID: '0', counterparty: 'self' },
-    "Input"
-  )
-  .addP2PKHOutput(recipientPublicKey, 1000, "Output")
+    sourceOutputIndex: 0,
+    walletParams: { protocolID: [2, 'p2pkh'], keyID: '0', counterparty: 'self' },
+    description: "Input"
+  })
+  .addP2PKHOutput({ publicKey: recipientPublicKey, satoshis: 1000, description: "Output" })
     .addOpReturn(['data'])
   .options({ randomizeOutputs: false })
   .build();
@@ -130,7 +130,7 @@ const recipientPublicKey = '02...'; // Recipient's public key
 
 // Build and execute transaction
 const result = await new TransactionTemplate(wallet, "Payment to Alice")
-  .addP2PKHOutput(recipientPublicKey, 5000, "Payment")
+  .addP2PKHOutput({ publicKey: recipientPublicKey, satoshis: 5000, description: "Payment" })
   .build();
 
 console.log(`Transaction ID: ${result.txid}`);
@@ -202,34 +202,35 @@ const templateWithDesc = new TransactionTemplate(wallet, "Payment to Bob");
 Add a Pay-to-Public-Key-Hash output.
 
 ```typescript
-addP2PKHOutput(
-  addressOrParams?: string | WalletDerivationParams,
-  satoshis: number,
-  description?: string
-): OutputBuilder
+addP2PKHOutput(params: AddP2PKHOutputParams): OutputBuilder
 ```
 
 **Parameters:**
-- `addressOrParams` - Public key hex string, wallet derivation parameters, or `undefined` for automatic BRC-29 derivation
-- `satoshis` - Amount in satoshis (must be non-negative)
-- `description` - Optional output description
+- `params` - Named parameter object with one of:
+  - `{ publicKey: string, satoshis: number, description?: string }` - With public key
+  - `{ walletParams: WalletDerivationParams, satoshis: number, description?: string }` - With wallet derivation
+  - `{ satoshis: number, description?: string }` - With automatic BRC-29 derivation
 
 **Returns:** `OutputBuilder` for configuring this output
 
 **Example:**
 ```typescript
 // With public key
-template.addP2PKHOutput(publicKeyHex, 1000, "Payment");
+template.addP2PKHOutput({ publicKey: publicKeyHex, satoshis: 1000, description: "Payment" });
 
 // With wallet derivation parameters
 template.addP2PKHOutput({
-  protocolID: [2, 'p2pkh'],
-  keyID: '0',
-  counterparty: 'self'
-}, 1000, "Payment");
+  walletParams: {
+    protocolID: [2, 'p2pkh'],
+    keyID: '0',
+    counterparty: 'self'
+  },
+  satoshis: 1000,
+  description: "Payment"
+});
 
 // With automatic BRC-29 derivation (recommended for most use cases)
-template.addP2PKHOutput(undefined, 1000, "Payment");
+template.addP2PKHOutput({ satoshis: 1000, description: "Payment" });
 // Derivation info automatically added to output.customInstructions
 ```
 
@@ -240,15 +241,14 @@ template.addP2PKHOutput(undefined, 1000, "Payment");
 Add a change output with automatic satoshi calculation during signing.
 
 ```typescript
-addChangeOutput(
-  addressOrParams?: string | WalletDerivationParams,
-  description?: string
-): OutputBuilder
+addChangeOutput(params?: AddChangeOutputParams): OutputBuilder
 ```
 
 **Parameters:**
-- `addressOrParams` - Public key hex string, wallet derivation parameters, or `undefined` for automatic BRC-29 derivation
-- `description` - Optional output description (default: "Change")
+- `params` - Named parameter object with one of:
+  - `{ publicKey: string, description?: string }` - With public key
+  - `{ walletParams: WalletDerivationParams, description?: string }` - With wallet derivation
+  - `{ description?: string }` - With automatic BRC-29 derivation
 
 **Returns:** `OutputBuilder` for configuring this output
 
@@ -277,9 +277,14 @@ const walletParams = {
 };
 
 const result = await new TransactionTemplate(wallet, "Payment with change")
-  .addP2PKHInput(sourceTransaction, 0, walletParams, "Input")
-  .addP2PKHOutput(recipientPublicKey, 1000, "Payment")
-  .addChangeOutput(walletParams, "Change") // Automatically calculated!
+  .addP2PKHInput({
+    sourceTransaction,
+    sourceOutputIndex: 0,
+    walletParams,
+    description: "Input"
+  })
+  .addP2PKHOutput({ publicKey: recipientPublicKey, satoshis: 1000, description: "Payment" })
+  .addChangeOutput({ walletParams, description: "Change" }) // Automatically calculated!
   .build();
 
 // Later: Spend the change output using the SAME parameters
@@ -287,13 +292,13 @@ const result = await new TransactionTemplate(wallet, "Payment with change")
 const changeTx = Transaction.fromAtomicBEEF(result.tx);
 
 const spendResult = await new TransactionTemplate(wallet, "Spending change")
-  .addP2PKHInput(
-    changeTx,            // Transaction containing the change output
-    1,                   // Index of the change output
-    walletParams,        // SAME parameters as when creating change!
-    "Spending change"
-  )
-  .addP2PKHOutput(recipientPublicKey, 500, "Next payment")
+  .addP2PKHInput({
+    sourceTransaction: changeTx,
+    sourceOutputIndex: 1,
+    walletParams,
+    description: "Spending change"
+  })
+  .addP2PKHOutput({ publicKey: recipientPublicKey, satoshis: 500, description: "Next payment" })
   .build();
 ```
 
@@ -304,42 +309,33 @@ const spendResult = await new TransactionTemplate(wallet, "Spending change")
 Add a 1Sat Ordinal output with optional inscription and MAP metadata.
 
 ```typescript
-addOrdinalP2PKHOutput(
-  addressOrParams: string | WalletDerivationParams,
-  satoshis: number,
-  inscription?: Inscription,
-  metadata?: MAP,
-  description?: string
-): OutputBuilder
+addOrdinalP2PKHOutput(params: AddOrdinalP2PKHOutputParams): OutputBuilder
 ```
 
 **Parameters:**
-- `addressOrParams` - Public key hex OR wallet derivation parameters
-- `satoshis` - Amount in satoshis (typically 1 for ordinals)
-- `inscription` - Optional inscription data `{ dataB64: string, contentType: string }`
-- `metadata` - Optional MAP metadata `{ app: string, type: string, ...customFields }`
-- `description` - Optional output description
+- `params` - Named parameter object with one of:
+  - `{ publicKey: string, satoshis: number, inscription?: Inscription, metadata?: MAP, description?: string }` - With public key
+  - `{ walletParams: WalletDerivationParams, satoshis: number, inscription?: Inscription, metadata?: MAP, description?: string }` - With wallet derivation
 
 **Returns:** `OutputBuilder` for configuring this output
 
 **Example:**
 ```typescript
-template.addOrdinalP2PKHOutput(
+template.addOrdinalP2PKHOutput({
   publicKey,
-  1,
-  { dataB64: imageBase64, contentType: 'image/png' },
-  { app: 'gallery', type: 'art', artist: 'Alice' },
-  "NFT Creation"
-);
+  satoshis: 1,
+  inscription: { dataB64: imageBase64, contentType: 'image/png' },
+  metadata: { app: 'gallery', type: 'art', artist: 'Alice' },
+  description: "NFT Creation"
+});
 
 // Reinscription (metadata only, no file)
-template.addOrdinalP2PKHOutput(
+template.addOrdinalP2PKHOutput({
   publicKey,
-  1,
-  undefined, // No inscription data
-  { app: 'gallery', type: 'art', owner: 'Bob' },
-  "NFT Transfer"
-);
+  satoshis: 1,
+  metadata: { app: 'gallery', type: 'art', owner: 'Bob' },
+  description: "NFT Transfer"
+});
 ```
 
 ---
@@ -349,17 +345,12 @@ template.addOrdinalP2PKHOutput(
 Add an output with a custom locking script.
 
 ```typescript
-addCustomOutput(
-  lockingScript: LockingScript,
-  satoshis: number,
-  description?: string
-): OutputBuilder
+addCustomOutput(params: AddCustomOutputParams): OutputBuilder
 ```
 
 **Parameters:**
-- `lockingScript` - Pre-built locking script
-- `satoshis` - Amount in satoshis
-- `description` - Optional output description
+- `params` - Named parameter object:
+  - `{ lockingScript: LockingScript, satoshis: number, description?: string }`
 
 **Returns:** `OutputBuilder` for configuring this output
 
@@ -368,7 +359,7 @@ addCustomOutput(
 import { LockingScript } from '@bsv/sdk';
 
 const customScript = LockingScript.fromASM('OP_TRUE');
-template.addCustomOutput(customScript, 1000, "Custom script output");
+template.addCustomOutput({ lockingScript: customScript, satoshis: 1000, description: "Custom script output" });
 ```
 
 ---
@@ -398,15 +389,15 @@ addOpReturn(fields: (string | number[])[]): TransactionTemplate
 **Example:**
 ```typescript
 // Plain text
-template.addP2PKHOutput(publicKey, 1)
+template.addP2PKHOutput({ publicKey, satoshis: 1 })
   .addOpReturn(['APP_ID', 'action', 'transfer']);
 
 // JSON data
-template.addP2PKHOutput(publicKey, 1)
+template.addP2PKHOutput({ publicKey, satoshis: 1 })
   .addOpReturn(['APP_ID', JSON.stringify({ user: 'Alice', amount: 100 })]);
 
 // Mixed types
-template.addP2PKHOutput(publicKey, 1)
+template.addP2PKHOutput({ publicKey, satoshis: 1 })
   .addOpReturn([
     'APP_ID',           // Text
     'deadbeef',         // Hex
@@ -433,11 +424,11 @@ basket(value: string): OutputBuilder
 
 **Example:**
 ```typescript
-template.addP2PKHOutput(publicKey, 1000, "Payment")
+template.addP2PKHOutput({ publicKey, satoshis: 1000, description: "Payment" })
   .basket("merchant-payments");
 
 // Chain with other methods
-template.addP2PKHOutput(publicKey, 5000)
+template.addP2PKHOutput({ publicKey, satoshis: 5000 })
   .basket("savings")
   .addOpReturn(['note', 'This is savings']);
 ```
@@ -464,11 +455,11 @@ customInstructions(value: string): OutputBuilder
 **Example:**
 ```typescript
 // Set custom application data
-template.addP2PKHOutput(publicKey, 1000)
+template.addP2PKHOutput({ publicKey, satoshis: 1000 })
   .customInstructions(JSON.stringify({ orderId: 12345, customerId: 'abc' }));
 
 // With BRC-29 auto-derivation - derivation info is appended
-template.addP2PKHOutput(undefined, 1000)  // Uses BRC-29 derivation
+template.addP2PKHOutput({ satoshis: 1000 })  // Uses BRC-29 derivation
   .customInstructions('app-data')
   .basket("payments");
 // Result: customInstructions = 'app-data' + '{"derivationPrefix":"...","derivationSuffix":"..."}'
@@ -496,7 +487,7 @@ outputDescription(desc: string): OutputBuilder
 
 **Example:**
 ```typescript
-template.addP2PKHOutput(publicKey, 1000)
+template.addP2PKHOutput({ publicKey, satoshis: 1000 })
   .outputDescription("Updated description")
   .addOpReturn(['metadata']);
 ```
@@ -510,38 +501,30 @@ template.addP2PKHOutput(publicKey, 1000)
 Add a P2PKH input (for spending a UTXO).
 
 ```typescript
-addP2PKHInput(
-  sourceTransaction: Transaction,
-  sourceOutputIndex: number,
-  walletParams?: WalletDerivationParams,
-  description?: string,
-  signOutputs?: 'all' | 'none' | 'single',
-  anyoneCanPay?: boolean,
-  sourceSatoshis?: number,
-  lockingScript?: Script
-): InputBuilder
+addP2PKHInput(params: AddP2PKHInputParams): InputBuilder
 ```
 
 **Parameters:**
-- `sourceTransaction` - Transaction containing the UTXO
-- `sourceOutputIndex` - Output index in source transaction
-- `walletParams` - Wallet derivation parameters (defaults to BRC-29 derivation scheme with counterparty 'self')
-- `description` - Optional input description
-- `signOutputs` - Signature scope: 'all' (default), 'none', 'single'
-- `anyoneCanPay` - SIGHASH_ANYONECANPAY flag (default: false)
-- `sourceSatoshis` - Optional satoshi amount
-- `lockingScript` - Optional locking script
+- `params` - Named parameter object:
+  - `sourceTransaction: Transaction` - Transaction containing the UTXO (required)
+  - `sourceOutputIndex: number` - Output index in source transaction (required)
+  - `walletParams?: WalletDerivationParams` - Wallet derivation parameters (defaults to BRC-29 derivation scheme with counterparty 'self')
+  - `description?: string` - Optional input description
+  - `signOutputs?: 'all' | 'none' | 'single'` - Signature scope: 'all' (default), 'none', 'single'
+  - `anyoneCanPay?: boolean` - SIGHASH_ANYONECANPAY flag (default: false)
+  - `sourceSatoshis?: number` - Optional satoshi amount
+  - `lockingScript?: Script` - Optional locking script
 
 **Returns:** `InputBuilder` for configuring this input
 
 **Example:**
 ```typescript
-template.addP2PKHInput(
+template.addP2PKHInput({
   sourceTransaction,
-  0,
-  { protocolID: [2, 'p2pkh'], keyID: '0', counterparty: 'self' },
-  "Spending UTXO"
-);
+  sourceOutputIndex: 0,
+  walletParams: { protocolID: [2, 'p2pkh'], keyID: '0', counterparty: 'self' },
+  description: "Spending UTXO"
+});
 ```
 
 ---
@@ -551,19 +534,18 @@ template.addP2PKHInput(
 Add an Ordinal P2PKH input (works same as P2PKH for unlocking).
 
 ```typescript
-addOrdinalP2PKHInput(
-  sourceTransaction: Transaction,
-  sourceOutputIndex: number,
-  walletParams?: WalletDerivationParams,
-  description?: string,
-  signOutputs?: 'all' | 'none' | 'single',
-  anyoneCanPay?: boolean,
-  sourceSatoshis?: number,
-  lockingScript?: Script
-): InputBuilder
+addOrdinalP2PKHInput(params: AddP2PKHInputParams): InputBuilder
 ```
 
-**Parameters:** Same as `addP2PKHInput()`
+**Parameters:** Same as `addP2PKHInput()` - named parameter object with:
+- `sourceTransaction: Transaction` (required)
+- `sourceOutputIndex: number` (required)
+- `walletParams?: WalletDerivationParams`
+- `description?: string`
+- `signOutputs?: 'all' | 'none' | 'single'`
+- `anyoneCanPay?: boolean`
+- `sourceSatoshis?: number`
+- `lockingScript?: Script`
 
 **Returns:** `InputBuilder` for configuring this input
 
@@ -574,23 +556,17 @@ addOrdinalP2PKHInput(
 Add an input with a custom unlocking script template.
 
 ```typescript
-addCustomInput(
-  unlockingScriptTemplate: any,
-  sourceTransaction: Transaction,
-  sourceOutputIndex: number,
-  description?: string,
-  sourceSatoshis?: number,
-  lockingScript?: Script
-): InputBuilder
+addCustomInput(params: AddCustomInputParams): InputBuilder
 ```
 
 **Parameters:**
-- `unlockingScriptTemplate` - Pre-built unlocking script template
-- `sourceTransaction` - Transaction containing the UTXO
-- `sourceOutputIndex` - Output index in source transaction
-- `description` - Optional input description
-- `sourceSatoshis` - Optional satoshi amount
-- `lockingScript` - Optional locking script
+- `params` - Named parameter object:
+  - `unlockingScriptTemplate: any` - Pre-built unlocking script template (required)
+  - `sourceTransaction: Transaction` - Transaction containing the UTXO (required)
+  - `sourceOutputIndex: number` - Output index in source transaction (required)
+  - `description?: string` - Optional input description
+  - `sourceSatoshis?: number` - Optional satoshi amount
+  - `lockingScript?: Script` - Optional locking script
 
 **Returns:** `InputBuilder` for configuring this input
 
@@ -709,7 +685,7 @@ console.log(preview.outputs, preview.options);
 const wallet = await makeWallet('test', storageURL, privateKeyHex);
 
 const result = await new TransactionTemplate(wallet, "Payment")
-  .addP2PKHOutput(bobPublicKey, 5000, "To Bob")
+  .addP2PKHOutput({ publicKey: bobPublicKey, satoshis: 5000, description: "To Bob" })
   .build();
 
 console.log(`Sent 5000 satoshis to Bob: ${result.txid}`);
@@ -727,7 +703,7 @@ const metadata = {
 };
 
 const result = await new TransactionTemplate(wallet, "Payment with memo")
-  .addP2PKHOutput(vendorPublicKey, 10000, "Vendor payment")
+  .addP2PKHOutput({ publicKey: vendorPublicKey, satoshis: 10000, description: "Vendor payment" })
     .addOpReturn(['MY_APP', JSON.stringify(metadata)])
   .build();
 ```
@@ -738,9 +714,9 @@ const result = await new TransactionTemplate(wallet, "Payment with memo")
 
 ```typescript
 const result = await new TransactionTemplate(wallet, "Multi-payment")
-  .addP2PKHOutput(alice, 1000, "To Alice")
-  .addP2PKHOutput(bob, 2000, "To Bob")
-  .addP2PKHOutput(charlie, 3000, "To Charlie")
+  .addP2PKHOutput({ publicKey: alice, satoshis: 1000, description: "To Alice" })
+  .addP2PKHOutput({ publicKey: bob, satoshis: 2000, description: "To Bob" })
+  .addP2PKHOutput({ publicKey: charlie, satoshis: 3000, description: "To Charlie" })
   .build();
 ```
 
@@ -750,11 +726,11 @@ const result = await new TransactionTemplate(wallet, "Multi-payment")
 
 ```typescript
 const result = await new TransactionTemplate(wallet, "Multiple payments")
-  .addP2PKHOutput(alice, 1000, "Payment 1")
+  .addP2PKHOutput({ publicKey: alice, satoshis: 1000, description: "Payment 1" })
     .addOpReturn(['APP_ID', 'payment', 'alice'])
-  .addP2PKHOutput(bob, 2000, "Payment 2")
+  .addP2PKHOutput({ publicKey: bob, satoshis: 2000, description: "Payment 2" })
     .addOpReturn(['APP_ID', 'payment', 'bob'])
-  .addP2PKHOutput(charlie, 3000, "Payment 3")
+  .addP2PKHOutput({ publicKey: charlie, satoshis: 3000, description: "Payment 3" })
     .addOpReturn(['APP_ID', 'payment', 'charlie'])
   .build();
 ```
@@ -768,19 +744,19 @@ const imageData = fs.readFileSync('artwork.png');
 const imageBase64 = imageData.toString('base64');
 
 const result = await new TransactionTemplate(wallet, "NFT Mint")
-  .addOrdinalP2PKHOutput(
-    artistPublicKey,
-    1,
-    { dataB64: imageBase64, contentType: 'image/png' },
-    {
+  .addOrdinalP2PKHOutput({
+    publicKey: artistPublicKey,
+    satoshis: 1,
+    inscription: { dataB64: imageBase64, contentType: 'image/png' },
+    metadata: {
       app: 'my-gallery',
       type: 'artwork',
       artist: 'Alice',
       title: 'Sunset Over Mountains',
       year: '2025'
     },
-    "NFT Creation"
-  )
+    description: "NFT Creation"
+  })
   .build();
 
 console.log(`NFT created: ${result.txid}`);
@@ -793,11 +769,10 @@ console.log(`NFT created: ${result.txid}`);
 ```typescript
 // Transfer without re-uploading file data
 const result = await new TransactionTemplate(wallet, "NFT Transfer")
-  .addOrdinalP2PKHOutput(
-    newOwnerPublicKey,
-    1,
-    undefined, // No inscription data
-    {
+  .addOrdinalP2PKHOutput({
+    publicKey: newOwnerPublicKey,
+    satoshis: 1,
+    metadata: {
       app: 'my-gallery',
       type: 'artwork',
       artist: 'Alice',
@@ -805,8 +780,8 @@ const result = await new TransactionTemplate(wallet, "NFT Transfer")
       owner: 'Bob',  // New owner
       transferred: Date.now().toString()
     },
-    "NFT Ownership Transfer"
-  )
+    description: "NFT Ownership Transfer"
+  })
   .build();
 ```
 
@@ -823,14 +798,19 @@ const params = {
 
 // Simple payment with wallet-derived output
 const result = await new TransactionTemplate(wallet, "Derived payment")
-  .addP2PKHOutput(params, 1000, "Payment to self")
+  .addP2PKHOutput({ walletParams: params, satoshis: 1000, description: "Payment to self" })
   .build();
 
 // With automatic change calculation
 const result2 = await new TransactionTemplate(wallet, "Payment with change")
-  .addP2PKHInput(sourceTransaction, 0, params, "Input")
-  .addP2PKHOutput(recipientPublicKey, 1000, "Payment")
-  .addChangeOutput(params, "Change") // Automatically calculated!
+  .addP2PKHInput({
+    sourceTransaction,
+    sourceOutputIndex: 0,
+    walletParams: params,
+    description: "Input"
+  })
+  .addP2PKHOutput({ publicKey: recipientPublicKey, satoshis: 1000, description: "Payment" })
+  .addChangeOutput({ walletParams: params, description: "Change" }) // Automatically calculated!
   .build();
 ```
 
@@ -841,7 +821,7 @@ const result2 = await new TransactionTemplate(wallet, "Payment with change")
 ```typescript
 // Build the transaction structure without executing
 const preview = await new TransactionTemplate(wallet, "Preview test")
-  .addP2PKHOutput(publicKey, 5000, "Test output")
+  .addP2PKHOutput({ publicKey, satoshis: 5000, description: "Test output" })
     .addOpReturn(['APP_ID', 'test-data'])
   .options({ randomizeOutputs: false })
   .build({ preview: true });
@@ -864,7 +844,7 @@ if (userConfirms) {
 
 ```typescript
 const result = await new TransactionTemplate(wallet, "Complex transaction")
-  .addP2PKHOutput(recipientPublicKey, 10000, "Payment")
+  .addP2PKHOutput({ publicKey: recipientPublicKey, satoshis: 10000, description: "Payment" })
   .options({
     randomizeOutputs: false,  // Preserve output order
     trustSelf: 'known',       // Trust input beef
@@ -889,9 +869,14 @@ const utxoParams = {
 };
 
 const result = await new TransactionTemplate(wallet, "Spending UTXO")
-  .addP2PKHInput(utxoTx, utxoIndex, utxoParams, "Input from previous tx")
-  .addP2PKHOutput(recipientPublicKey, 4500, "Payment")
-  .addChangeOutput(utxoParams, "Change") // Automatically calculated after fees!
+  .addP2PKHInput({
+    sourceTransaction: utxoTx,
+    sourceOutputIndex: utxoIndex,
+    walletParams: utxoParams,
+    description: "Input from previous tx"
+  })
+  .addP2PKHOutput({ publicKey: recipientPublicKey, satoshis: 4500, description: "Payment" })
+  .addChangeOutput({ walletParams: utxoParams, description: "Change" }) // Automatically calculated after fees!
   .build();
 ```
 
@@ -908,12 +893,12 @@ const template = new TransactionTemplate(wallet, "Complex transaction");
 
 // Add first output with metadata
 const afterOutput1 = template
-  .addP2PKHOutput(alice, 1000, "Payment 1")
+  .addP2PKHOutput({ publicKey: alice, satoshis: 1000, description: "Payment 1" })
     .addOpReturn(['data1']); // Returns TransactionTemplate
 
 // Add second output with description and metadata
 const afterOutput2 = afterOutput1
-  .addP2PKHOutput(bob, 2000) // No description yet
+  .addP2PKHOutput({ publicKey: bob, satoshis: 2000 }) // No description yet
     .outputDescription("Payment 2") // Add description
     .addOpReturn(['data2']); // Returns TransactionTemplate
 
@@ -928,7 +913,7 @@ const result = await afterOutput2
 ```typescript
 try {
   const result = await new TransactionTemplate(wallet, "Transaction")
-    .addP2PKHOutput(publicKey, 1000)
+    .addP2PKHOutput({ publicKey, satoshis: 1000 })
     .build();
 
   console.log(`Success: ${result.txid}`);
@@ -948,7 +933,7 @@ try {
 ```typescript
 async function buildAndDebugTransaction() {
   const template = new TransactionTemplate(wallet, "Debug transaction")
-    .addP2PKHOutput(publicKey, 1000, "Test")
+    .addP2PKHOutput({ publicKey, satoshis: 1000, description: "Test" })
     .addOpReturn(['debug', 'data']);
 
   // Preview first
@@ -969,17 +954,17 @@ async function buildAndDebugTransaction() {
 
 ```typescript
 let template = new TransactionTemplate(wallet, "Conditional transaction")
-  .addP2PKHOutput(recipientPublicKey, baseAmount, "Base payment");
+  .addP2PKHOutput({ publicKey: recipientPublicKey, satoshis: baseAmount, description: "Base payment" });
 
 // Add bonus if applicable
 if (includeBonus) {
-  template = template.addP2PKHOutput(recipientPublicKey, bonusAmount, "Bonus");
+  template = template.addP2PKHOutput({ publicKey: recipientPublicKey, satoshis: bonusAmount, description: "Bonus" });
 }
 
 // Add metadata if requested
 if (includeMetadata) {
   template = template
-    .addP2PKHOutput(recipientPublicKey, 1)
+    .addP2PKHOutput({ publicKey: recipientPublicKey, satoshis: 1 })
       .addOpReturn(['APP_ID', JSON.stringify(metadata)]);
 }
 
@@ -1014,8 +999,12 @@ const myUTXO: StoredUTXO = {
 
 // Later, spend using the stored params
 const spendResult = await new TransactionTemplate(wallet, "Spending stored UTXO")
-  .addP2PKHInput(sourceTx, myUTXO.outputIndex, myUTXO.derivationParams)
-  .addP2PKHOutput(recipientPublicKey, myUTXO.satoshis - 100)
+  .addP2PKHInput({
+    sourceTransaction: sourceTx,
+    sourceOutputIndex: myUTXO.outputIndex,
+    walletParams: myUTXO.derivationParams
+  })
+  .addP2PKHOutput({ publicKey: recipientPublicKey, satoshis: myUTXO.satoshis - 100 })
   .build();
 ```
 
@@ -1035,9 +1024,14 @@ import { Transaction } from '@bsv/sdk';
 const params = { protocolID: [2, 'p2pkh'], keyID: '0', counterparty: 'self' };
 
 const result = await new TransactionTemplate(wallet)
-  .addP2PKHInput(sourceTx, 0, params, "Input")
-  .addP2PKHOutput(recipientPublicKey, 1000, "Payment")
-  .addChangeOutput(params, "Change")
+  .addP2PKHInput({
+    sourceTransaction: sourceTx,
+    sourceOutputIndex: 0,
+    walletParams: params,
+    description: "Input"
+  })
+  .addP2PKHOutput({ publicKey: recipientPublicKey, satoshis: 1000, description: "Payment" })
+  .addChangeOutput({ walletParams: params, description: "Change" })
   .build();
 
 // Store with UTXO for later spending
@@ -1052,17 +1046,22 @@ const changeUTXO = {
 const changeTx = Transaction.fromAtomicBEEF(result.tx);
 
 await new TransactionTemplate(wallet)
-  .addP2PKHInput(changeTx, changeUTXO.outputIndex, params, "Spending change")
-  .addP2PKHOutput(recipientPublicKey, 500)
+  .addP2PKHInput({
+    sourceTransaction: changeTx,
+    sourceOutputIndex: changeUTXO.outputIndex,
+    walletParams: params,
+    description: "Spending change"
+  })
+  .addP2PKHOutput({ publicKey: recipientPublicKey, satoshis: 500 })
   .build();
 
 // ❌ Bad: Use different params when spending
 const wrongTx = Transaction.fromAtomicBEEF(result.tx);
-await template.addP2PKHInput(
-  wrongTx,
-  1,
-  { protocolID: [2, 'p2pkh'], keyID: '1', counterparty: 'self' } // WRONG!
-); // Won't unlock the change output!
+await template.addP2PKHInput({
+  sourceTransaction: wrongTx,
+  sourceOutputIndex: 1,
+  walletParams: { protocolID: [2, 'p2pkh'], keyID: '1', counterparty: 'self' } // WRONG!
+}); // Won't unlock the change output!
 ```
 
 ### 2. Use Descriptive Names
@@ -1070,12 +1069,12 @@ await template.addP2PKHInput(
 ```typescript
 // ✅ Good: Clear descriptions
 await new TransactionTemplate(wallet, "Payment to vendor for invoice #12345")
-  .addP2PKHOutput(vendorPublicKey, 10000, "Vendor payment")
+  .addP2PKHOutput({ publicKey: vendorPublicKey, satoshis: 10000, description: "Vendor payment" })
   .build();
 
 // ❌ Bad: Generic descriptions
 await new TransactionTemplate(wallet, "Transaction")
-  .addP2PKHOutput(vendorPublicKey, 10000, "Output")
+  .addP2PKHOutput({ publicKey: vendorPublicKey, satoshis: 10000, description: "Output" })
   .build();
 ```
 
@@ -1097,8 +1096,8 @@ if (confirmed) {
 ```typescript
 // ✅ Good: Each output has its own metadata
 template
-  .addP2PKHOutput(alice, 1000).addOpReturn(['payment', 'alice'])
-  .addP2PKHOutput(bob, 2000).addOpReturn(['payment', 'bob']);
+  .addP2PKHOutput({ publicKey: alice, satoshis: 1000 }).addOpReturn(['payment', 'alice'])
+  .addP2PKHOutput({ publicKey: bob, satoshis: 2000 }).addOpReturn(['payment', 'bob']);
 ```
 
 ### 5. Handle Errors Gracefully
@@ -1130,9 +1129,14 @@ const myParams = {
 // No need to manually calculate change and fees!
 // addChangeOutput automatically handles fee calculation
 await new TransactionTemplate(wallet, "Payment with change")
-  .addP2PKHInput(sourceTransaction, 0, myParams, "UTXO")
-  .addP2PKHOutput(recipientPublicKey, 7000, "Payment")
-  .addChangeOutput(myParams, "Change") // Automatically: input - payment - fees
+  .addP2PKHInput({
+    sourceTransaction,
+    sourceOutputIndex: 0,
+    walletParams: myParams,
+    description: "UTXO"
+  })
+  .addP2PKHOutput({ publicKey: recipientPublicKey, satoshis: 7000, description: "Payment" })
+  .addChangeOutput({ walletParams: myParams, description: "Change" }) // Automatically: input - payment - fees
   .build();
 ```
 
@@ -1141,9 +1145,14 @@ await new TransactionTemplate(wallet, "Payment with change")
 ```typescript
 // Change outputs support OP_RETURN just like regular outputs
 await new TransactionTemplate(wallet, "Payment with tracked change")
-  .addP2PKHInput(sourceTransaction, 0, myParams, "Input")
-  .addP2PKHOutput(recipientPublicKey, 5000, "Payment")
-  .addChangeOutput(myParams, "Change")
+  .addP2PKHInput({
+    sourceTransaction,
+    sourceOutputIndex: 0,
+    walletParams: myParams,
+    description: "Input"
+  })
+  .addP2PKHOutput({ publicKey: recipientPublicKey, satoshis: 5000, description: "Payment" })
+  .addChangeOutput({ walletParams: myParams, description: "Change" })
     .addOpReturn(['APP_ID', JSON.stringify({ changeType: 'auto', timestamp: Date.now() })])
   .build();
 ```
@@ -1158,10 +1167,15 @@ const changeParams1 = { protocolID: [2, 'p2pkh'], keyID: '1', counterparty: 'sel
 const changeParams2 = { protocolID: [2, 'p2pkh'], keyID: '2', counterparty: 'self' };
 
 await new TransactionTemplate(wallet, "Split change")
-  .addP2PKHInput(sourceTransaction, 0, myParams, "Input")
-  .addP2PKHOutput(recipientPublicKey, 3000, "Payment")
-  .addChangeOutput(changeParams1, "Change 1") // Gets calculated change / 2
-  .addChangeOutput(changeParams2, "Change 2") // Gets calculated change / 2
+  .addP2PKHInput({
+    sourceTransaction,
+    sourceOutputIndex: 0,
+    walletParams: myParams,
+    description: "Input"
+  })
+  .addP2PKHOutput({ publicKey: recipientPublicKey, satoshis: 3000, description: "Payment" })
+  .addChangeOutput({ walletParams: changeParams1, description: "Change 1" }) // Gets calculated change / 2
+  .addChangeOutput({ walletParams: changeParams2, description: "Change 2" }) // Gets calculated change / 2
   .build();
 ```
 
@@ -1179,11 +1193,11 @@ const recipients = [
 let template = new TransactionTemplate(wallet, "Multi-recipient payment");
 
 for (const recipient of recipients) {
-  template = template.addP2PKHOutput(
-    recipient.publicKey,
-    recipient.amount,
-    `Payment to ${recipient.name}`
-  );
+  template = template.addP2PKHOutput({
+    publicKey: recipient.publicKey,
+    satoshis: recipient.amount,
+    description: `Payment to ${recipient.name}`
+  });
 }
 
 const result = await template.build();
@@ -1193,7 +1207,7 @@ const result = await template.build();
 
 ```typescript
 await new TransactionTemplate(wallet, "Document hash")
-  .addP2PKHOutput(myPublicKey, 1, "Document proof")
+  .addP2PKHOutput({ publicKey: myPublicKey, satoshis: 1, description: "Document proof" })
     .addOpReturn([
       'DOC_HASH',
       documentHash,
@@ -1220,7 +1234,7 @@ await new TransactionTemplate(wallet).build();
 
 // ✅ Fixed
 await new TransactionTemplate(wallet)
-  .addP2PKHOutput(publicKey, 1000)
+  .addP2PKHOutput({ publicKey, satoshis: 1000 })
   .build();
 ```
 
@@ -1244,15 +1258,20 @@ Change outputs need inputs to calculate remaining balance:
 ```typescript
 // ❌ Error: No inputs
 await new TransactionTemplate(wallet)
-  .addP2PKHOutput(publicKey, 1000)
-  .addChangeOutput(myParams) // ERROR: no inputs!
+  .addP2PKHOutput({ publicKey, satoshis: 1000 })
+  .addChangeOutput({ walletParams: myParams }) // ERROR: no inputs!
   .build();
 
 // ✅ Fixed: Add at least one input first
 await new TransactionTemplate(wallet)
-  .addP2PKHInput(sourceTransaction, 0, myParams, "Input")
-  .addP2PKHOutput(publicKey, 1000)
-  .addChangeOutput(myParams, "Change") // Now works!
+  .addP2PKHInput({
+    sourceTransaction,
+    sourceOutputIndex: 0,
+    walletParams: myParams,
+    description: "Input"
+  })
+  .addP2PKHOutput({ publicKey, satoshis: 1000 })
+  .addChangeOutput({ walletParams: myParams, description: "Change" }) // Now works!
   .build();
 ```
 
@@ -1262,18 +1281,18 @@ You can only add OP_RETURN once per output:
 
 ```typescript
 // ❌ Error
-template.addP2PKHOutput(publicKey, 1)
+template.addP2PKHOutput({ publicKey, satoshis: 1 })
   .addOpReturn(['data1'])
   .addOpReturn(['data2']); // Can't add second OP_RETURN to same output
 
 // ✅ Fixed: Put all data in one call
-template.addP2PKHOutput(publicKey, 1)
+template.addP2PKHOutput({ publicKey, satoshis: 1 })
   .addOpReturn(['data1', 'data2']);
 
 // ✅ Or: Use separate outputs
 template
-  .addP2PKHOutput(publicKey, 1).addOpReturn(['data1'])
-  .addP2PKHOutput(publicKey, 1).addOpReturn(['data2']);
+  .addP2PKHOutput({ publicKey, satoshis: 1 }).addOpReturn(['data1'])
+  .addP2PKHOutput({ publicKey, satoshis: 1 }).addOpReturn(['data2']);
 ```
 
 ---

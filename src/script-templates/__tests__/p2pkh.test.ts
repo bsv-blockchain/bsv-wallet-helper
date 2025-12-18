@@ -24,7 +24,7 @@ describe('P2PKH locking script', () => {
       const publicKeyHex = publicKey.toString();
 
       const p2pkh = new P2PKH();
-      const lockingScript = await p2pkh.lock(publicKeyHex);
+      const lockingScript = await p2pkh.lock({ publicKey: publicKeyHex });
 
       // Verify the script structure
       const scriptChunks = lockingScript.chunks;
@@ -42,7 +42,7 @@ describe('P2PKH locking script', () => {
       const publicKeyHex = publicKey.toString();
 
       const p2pkh = new P2PKH();
-      const lockingScript = await p2pkh.lock(publicKeyHex);
+      const lockingScript = await p2pkh.lock({ publicKey: publicKeyHex });
 
       // Get the hash from the script
       const scriptHash = lockingScript.chunks[2].data;
@@ -61,7 +61,7 @@ describe('P2PKH locking script', () => {
       const pubKeyHash = publicKey.toHash() as number[];
 
       const p2pkh = new P2PKH();
-      const lockingScript = await p2pkh.lock(pubKeyHash);
+      const lockingScript = await p2pkh.lock({ pubkeyhash: pubKeyHash });
 
       // Verify the script structure
       const scriptChunks = lockingScript.chunks;
@@ -73,7 +73,7 @@ describe('P2PKH locking script', () => {
       const invalidHash = new Array(19).fill(0); // Wrong length
 
       const p2pkh = new P2PKH();
-      await expect(p2pkh.lock(invalidHash)).rejects.toThrow('Failed to generate valid public key hash (must be 20 bytes)');
+      await expect(p2pkh.lock({ pubkeyhash: invalidHash })).rejects.toThrow('Failed to generate valid public key hash (must be 20 bytes)');
     });
   });
 
@@ -84,9 +84,11 @@ describe('P2PKH locking script', () => {
 
       const p2pkh = new P2PKH(wallet);
       const lockingScript = await p2pkh.lock({
-        protocolID: [2, 'p2pkh'] as WalletProtocol,
-        keyID: '0',
-        counterparty: 'self' as WalletCounterparty
+        walletParams: {
+          protocolID: [2, 'p2pkh'] as WalletProtocol,
+          keyID: '0',
+          counterparty: 'self' as WalletCounterparty
+        }
       });
 
       // Verify the script structure
@@ -119,13 +121,15 @@ describe('P2PKH locking script', () => {
 
       // Lock with wallet
       const lockingScriptFromWallet = await p2pkhWithWallet.lock({
-        protocolID,
-        keyID,
-        counterparty
+        walletParams: {
+          protocolID,
+          keyID,
+          counterparty
+        }
       });
 
       // Lock with public key string
-      const lockingScriptFromPubKey = await p2pkhWithoutWallet.lock(publicKey);
+      const lockingScriptFromPubKey = await p2pkhWithoutWallet.lock({ publicKey });
 
       // Both should produce identical scripts
       expect(lockingScriptFromWallet.toHex()).toBe(lockingScriptFromPubKey.toHex());
@@ -136,8 +140,8 @@ describe('P2PKH locking script', () => {
     test('should reject when neither pubkeyhash nor wallet is provided', async () => {
       const p2pkh = new P2PKH();
       // @ts-ignore ignore for test
-      await expect(p2pkh.lock(undefined, undefined)).rejects.toThrow(
-        'pubkeyhash or wallet is required'
+      await expect(p2pkh.lock({})).rejects.toThrow(
+        'One of pubkeyhash, publicKey, or walletParams is required'
       );
     });
   });
@@ -172,7 +176,7 @@ describe('P2PKH unlocking and transaction verification', () => {
 
     // Create the P2PKH locking script
     const p2pkhLock = new P2PKH();
-    const lockingScript = await p2pkhLock.lock(userLockingKey);
+    const lockingScript = await p2pkhLock.lock({ publicKey: userLockingKey });
 
     sourceTransaction.addOutput({
       lockingScript,
@@ -192,16 +196,16 @@ describe('P2PKH unlocking and transaction verification', () => {
     spendingTx.addInput({
       sourceTransaction,
       sourceOutputIndex: 0,
-      unlockingScriptTemplate: p2pkhUnlock.unlock(
+      unlockingScriptTemplate: p2pkhUnlock.unlock({
         protocolID,
         keyID,
         counterparty
-      )
+      })
     });
 
     // Add output (send to same address)
     spendingTx.addOutput({
-      lockingScript: await p2pkhLock.lock(userLockingKey),
+      lockingScript: await p2pkhLock.lock({ publicKey: userLockingKey }),
       satoshis: 900
     });
 
@@ -229,7 +233,7 @@ describe('P2PKH unlocking and transaction verification', () => {
     });
 
     const p2pkhLock = new P2PKH();
-    const lockingScript = await p2pkhLock.lock(userLockingKey);
+    const lockingScript = await p2pkhLock.lock({ publicKey: userLockingKey });
 
     // Create two source transactions
     const sourceTx1 = new Transaction();
@@ -263,25 +267,25 @@ describe('P2PKH unlocking and transaction verification', () => {
     spendingTx.addInput({
       sourceTransaction: sourceTx1,
       sourceOutputIndex: 0,
-      unlockingScriptTemplate: p2pkhUnlock.unlock(
+      unlockingScriptTemplate: p2pkhUnlock.unlock({
         protocolID,
         keyID,
         counterparty
-      )
+      })
     });
 
     spendingTx.addInput({
       sourceTransaction: sourceTx2,
       sourceOutputIndex: 0,
-      unlockingScriptTemplate: p2pkhUnlock.unlock(
+      unlockingScriptTemplate: p2pkhUnlock.unlock({
         protocolID,
         keyID,
         counterparty
-      )
+      })
     });
 
     spendingTx.addOutput({
-      lockingScript: await p2pkhLock.lock(userLockingKey),
+      lockingScript: await p2pkhLock.lock({ publicKey: userLockingKey }),
       satoshis: 2900
     });
 
@@ -308,7 +312,7 @@ describe('P2PKH unlocking and transaction verification', () => {
     });
 
     const p2pkhLock = new P2PKH();
-    const lockingScript = await p2pkhLock.lock(userLockingKey);
+    const lockingScript = await p2pkhLock.lock({ publicKey: userLockingKey });
 
     const sourceTransaction = new Transaction();
     sourceTransaction.addInput({
@@ -328,17 +332,17 @@ describe('P2PKH unlocking and transaction verification', () => {
     spendingTx.addInput({
       sourceTransaction,
       sourceOutputIndex: 0,
-      unlockingScriptTemplate: p2pkhUnlock.unlock(
+      unlockingScriptTemplate: p2pkhUnlock.unlock({
         protocolID,
         keyID,
         counterparty,
-        'single', // signOutputs
-        false     // anyoneCanPay
-      )
+        signOutputs: 'single',
+        anyoneCanPay: false
+      })
     });
 
     spendingTx.addOutput({
-      lockingScript: await p2pkhLock.lock(userLockingKey),
+      lockingScript: await p2pkhLock.lock({ publicKey: userLockingKey }),
       satoshis: 900
     });
 
@@ -359,11 +363,11 @@ describe('P2PKH unlocking and transaction verification', () => {
     const counterparty = 'self' as WalletCounterparty;
 
     const p2pkh = new P2PKH(userWallet);
-    const unlockTemplate = p2pkh.unlock(
+    const unlockTemplate = p2pkh.unlock({
       protocolID,
       keyID,
       counterparty
-    );
+    });
 
     const estimatedLength = await unlockTemplate.estimateLength();
 

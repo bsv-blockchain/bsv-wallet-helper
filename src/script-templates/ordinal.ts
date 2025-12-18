@@ -12,6 +12,13 @@ import {
 import P2PKH from "./p2pkh";
 import { ORDINAL_MAP_PREFIX } from "../utils/constants";
 import { WalletDerivationParams } from "../types/wallet";
+import {
+    OrdinalLockParams,
+    OrdinalLockWithPubkeyhash,
+    OrdinalLockWithPublicKey,
+    OrdinalLockWithWallet,
+    OrdinalUnlockParams
+} from "./types";
 
 export type Inscription = {
   dataB64: string;
@@ -47,110 +54,88 @@ export default class OrdP2PKH implements ScriptTemplate {
 	}
 
 	/**
-	 * Creates a 1Sat Ordinal + P2PKH locking script from a public key or public key hash.
+	 * Creates a 1Sat Ordinal + P2PKH locking script from a public key hash.
 	 *
-	 * @param pubkeyhash - Either a hex string of the public key or a number array of the public key hash (20 bytes)
-	 * @param inscription - Optional inscription data (base64 file data and content type)
-	 * @param metaData - Optional MAP metadata (requires app and type fields)
+	 * @param params - Object containing pubkeyhash, inscription, and metadata
 	 * @returns A P2PKH locking script with ordinal inscription
 	 */
-	lock(
-		pubkeyhash: string | number[],
-		inscription?: Inscription,
-		metaData?: MAP
-	): Promise<LockingScript>
+	lock(params: OrdinalLockWithPubkeyhash): Promise<LockingScript>
+	/**
+	 * Creates a 1Sat Ordinal + P2PKH locking script from a public key string.
+	 *
+	 * @param params - Object containing publicKey, inscription, and metadata
+	 * @returns A P2PKH locking script with ordinal inscription
+	 */
+	lock(params: OrdinalLockWithPublicKey): Promise<LockingScript>
 	/**
 	 * Creates a 1Sat Ordinal + P2PKH locking script using the instance's BRC-100 wallet to derive the public key.
 	 *
-	 * @param walletParams - Wallet derivation parameters (protocolID, keyID, counterparty)
-	 * @param inscription - Optional inscription data (base64 file data and content type)
-	 * @param metaData - Optional MAP metadata (requires app and type fields)
+	 * @param params - Object containing walletParams, inscription, and metadata
 	 * @returns A P2PKH locking script with ordinal inscription
 	 */
-	lock(
-		walletParams: WalletDerivationParams,
-		inscription?: Inscription,
-		metaData?: MAP
-	): Promise<LockingScript>
-	async lock(
-		pubkeyhashOrWalletParams: string | number[] | WalletDerivationParams,
-		inscription?: Inscription,
-		metaData?: MAP
-	): Promise<LockingScript> {
+	lock(params: OrdinalLockWithWallet): Promise<LockingScript>
+	async lock(params: OrdinalLockParams): Promise<LockingScript> {
 		// Validate inscription structure if provided
-		if (inscription !== undefined) {
-			if (typeof inscription !== 'object' || inscription === null) {
+		if (params.inscription !== undefined) {
+			if (typeof params.inscription !== 'object' || params.inscription === null) {
 				throw new Error('inscription must be an object with dataB64 and contentType properties');
 			}
-			if (!inscription.dataB64 || typeof inscription.dataB64 !== 'string') {
+			if (!params.inscription.dataB64 || typeof params.inscription.dataB64 !== 'string') {
 				throw new Error('inscription.dataB64 is required and must be a base64 string');
 			}
-			if (!inscription.contentType || typeof inscription.contentType !== 'string') {
+			if (!params.inscription.contentType || typeof params.inscription.contentType !== 'string') {
 				throw new Error('inscription.contentType is required and must be a string (MIME type)');
 			}
 		}
 
 		// Validate MAP metadata structure if provided
-		if (metaData !== undefined) {
-			if (typeof metaData !== 'object' || metaData === null) {
-				throw new Error('metaData must be an object');
+		if (params.metadata !== undefined) {
+			if (typeof params.metadata !== 'object' || params.metadata === null) {
+				throw new Error('metadata must be an object');
 			}
-			if (!metaData.app || typeof metaData.app !== 'string') {
-				throw new Error('metaData.app is required and must be a string');
+			if (!params.metadata.app || typeof params.metadata.app !== 'string') {
+				throw new Error('metadata.app is required and must be a string');
 			}
-			if (!metaData.type || typeof metaData.type !== 'string') {
-				throw new Error('metaData.type is required and must be a string');
+			if (!params.metadata.type || typeof params.metadata.type !== 'string') {
+				throw new Error('metadata.type is required and must be a string');
 			}
 		}
 
 		let lockingScript: LockingScript;
 
-		// Check if using direct pubkeyhash or wallet derivation
-		if (typeof pubkeyhashOrWalletParams === 'string' || Array.isArray(pubkeyhashOrWalletParams)) {
-			// Use pubkeyhash directly
-			lockingScript = await this.p2pkh.lock(pubkeyhashOrWalletParams);
+		// Determine which parameter was provided and delegate to p2pkh
+		if ('pubkeyhash' in params) {
+			lockingScript = await this.p2pkh.lock({ pubkeyhash: params.pubkeyhash });
+		} else if ('publicKey' in params) {
+			lockingScript = await this.p2pkh.lock({ publicKey: params.publicKey });
+		} else if ('walletParams' in params) {
+			lockingScript = await this.p2pkh.lock({ walletParams: params.walletParams });
 		} else {
-			// Use wallet to derive public key
-			lockingScript = await this.p2pkh.lock(pubkeyhashOrWalletParams);
+			throw new Error('One of pubkeyhash, publicKey, or walletParams is required');
 		}
 
 		// Apply ordinal inscription and MAP metadata
-		return applyInscription(lockingScript, inscription, metaData);
+		return applyInscription(lockingScript, params.inscription, params.metadata);
 	}
 
 	/**
 	 * Creates a function that generates a P2PKH unlocking script using the instance's BRC-100 wallet.
 	 *
-	 * @param protocolID - Protocol identifier for key derivation (default: [2, "p2pkh"])
-	 * @param keyID - Specific key identifier within the protocol (default: '0')
-	 * @param counterparty - The counterparty for which the key is being used (default: 'self')
-	 * @param signOutputs - The signature scope for outputs: 'all', 'none', or 'single' (default: 'all')
-	 * @param anyoneCanPay - Flag indicating if the signature allows for other inputs to be added later (default: false)
-	 * @param sourceSatoshis - Optional. The amount in satoshis being unlocked. Otherwise input.sourceTransaction is required.
-	 * @param lockingScript - Optional. The locking script being unlocked. Otherwise input.sourceTransaction is required.
+	 * @param params - Named parameters object (see P2PKH.unlock for details)
+	 * @param params.protocolID - Protocol identifier for key derivation (default: [2, "p2pkh"])
+	 * @param params.keyID - Specific key identifier within the protocol (default: '0')
+	 * @param params.counterparty - The counterparty for which the key is being used (default: 'self')
+	 * @param params.signOutputs - The signature scope for outputs: 'all', 'none', or 'single' (default: 'all')
+	 * @param params.anyoneCanPay - Flag indicating if the signature allows for other inputs to be added later (default: false)
+	 * @param params.sourceSatoshis - Optional. The amount in satoshis being unlocked. Otherwise input.sourceTransaction is required.
+	 * @param params.lockingScript - Optional. The locking script being unlocked. Otherwise input.sourceTransaction is required.
 	 * @returns An object containing the `sign` and `estimateLength` functions
 	 */
-	unlock(
-		protocolID?: WalletProtocol,
-		keyID?: string,
-		counterparty: WalletCounterparty = 'self',
-		signOutputs: 'all' | 'none' | 'single' = 'all',
-		anyoneCanPay: boolean = false,
-		sourceSatoshis?: number,
-		lockingScript?: Script
-	): {
+	unlock(params?: OrdinalUnlockParams): {
 		sign: (tx: Transaction, inputIndex: number) => Promise<UnlockingScript>
 		estimateLength: () => Promise<108>
 	} {
-		return this.p2pkh.unlock(
-			protocolID,
-			keyID,
-			counterparty,
-			signOutputs,
-			anyoneCanPay,
-			sourceSatoshis,
-			lockingScript
-		);
+		return this.p2pkh.unlock(params);
 	}
 }
 

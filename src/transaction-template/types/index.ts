@@ -2,3 +2,4 @@ export { BuildParams } from './build-params';
 export { InputConfig } from './input-config';
 export { OutputConfig } from './output-config';
 export { isDerivationParams } from './type-guards';
+export * from './params';

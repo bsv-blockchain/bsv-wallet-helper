@@ -28,7 +28,7 @@ import { TransactionTemplate } from 'bsv-wallet-helper';
 
 // Simple P2PKH transaction with metadata
 const result = await new TransactionTemplate(wallet, "Payment to Bob")
-  .addP2PKHOutput(bobPublicKey, 1000, "Payment")
+  .addP2PKHOutput({ publicKey: bobPublicKey, satoshis: 1000, description: "Payment" })
     .addOpReturn(['APP_ID', JSON.stringify({ memo: 'Thanks!' })])
   .build();
 
@@ -36,7 +36,7 @@ console.log(`Transaction created: ${result.txid}`);
 
 // Preview mode - see what will be sent without executing
 const preview = await new TransactionTemplate(wallet)
-  .addP2PKHOutput(alicePublicKey, 5000)
+  .addP2PKHOutput({ publicKey: alicePublicKey, satoshis: 5000 })
   .build({ preview: true });
 
 console.log('Transaction preview:', preview);
@@ -59,18 +59,18 @@ console.log('Transaction preview:', preview);
 ```typescript
 // Change is automatically calculated: inputs - outputs - fees
 await new TransactionTemplate(wallet, "Payment with change")
-  .addP2PKHInput(sourceTransaction, 0, walletParams, "UTXO")
-  .addP2PKHOutput(recipientPublicKey, 5000, "Payment")
-  .addChangeOutput(walletParams, "Change") // Satoshis calculated automatically!
+  .addP2PKHInput({ sourceTransaction, sourceOutputIndex: 0, walletParams, description: "UTXO" })
+  .addP2PKHOutput({ publicKey: recipientPublicKey, satoshis: 5000, description: "Payment" })
+  .addChangeOutput({ walletParams, description: "Change" }) // Satoshis calculated automatically!
   .build();
 ```
 
 **Example with BRC-29 auto-derivation, basket, and customInstructions:**
 ```typescript
-// Omit addressOrParams to use automatic BRC-29 derivation
+// Omit publicKey/walletParams to use automatic BRC-29 derivation
 // Derivation info is automatically added to customInstructions
 await new TransactionTemplate(wallet, "Auto-derived transaction")
-  .addP2PKHOutput(undefined, 1000, "Payment")  // Uses BRC-29 derivation
+  .addP2PKHOutput({ satoshis: 1000, description: "Payment" })  // Uses BRC-29 derivation
     .basket("my-basket")  // Set basket for this output
     .customInstructions("app-specific-data")  // Append custom instructions
   .build();
@@ -86,24 +86,26 @@ Wallet-compatible Pay-to-Public-Key-Hash template.
 ```typescript
 import { WalletP2PKH, type WalletDerivationParams } from 'bsv-wallet-helper';
 
-// Option 1: Direct public key/hash
+// Option 1: Direct public key
 const p2pkh = new WalletP2PKH();
-const lockingScript = await p2pkh.lock(publicKeyHex);
+const lockingScript = await p2pkh.lock({ publicKey: publicKeyHex });
 
 // Option 2: With BRC-100 wallet
 const p2pkh = new WalletP2PKH(wallet);
 const lockingScript = await p2pkh.lock({
+  walletParams: {
+    protocolID: [2, 'p2pkh'],
+    keyID: '0',
+    counterparty: 'self'
+  }
+});
+
+// Unlocking (requires wallet)
+const unlockingTemplate = p2pkh.unlock({
   protocolID: [2, 'p2pkh'],
   keyID: '0',
   counterparty: 'self'
 });
-
-// Unlocking (requires wallet)
-const unlockingTemplate = p2pkh.unlock(
-  protocolID: [2, 'p2pkh'],
-  keyID: '0',
-  counterparty: 'self'
-);
 ```
 
 #### `WalletOrdP2PKH`
@@ -126,15 +128,15 @@ const metadata: MAP = {
   author: 'Satoshi'
 };
 
-const lockingScript = await ordP2pkh.lock(
-  { 
-    protocolID: [2, 'p2pkh'], 
-    keyID: '0', 
-    counterparty: 'self' 
+const lockingScript = await ordP2pkh.lock({
+  walletParams: {
+    protocolID: [2, 'p2pkh'],
+    keyID: '0',
+    counterparty: 'self'
   },
   inscription,
   metadata
-);
+});
 ```
 
 ### Types
@@ -278,36 +280,36 @@ const scriptMixed = addOpReturnData(lockingScript, [
 const wallet = await makeWallet('test', storageURL, privateKeyHex);
 const p2pkh = new WalletP2PKH(wallet);
 
-const params = {
+const walletParams = {
   protocolID: [2, 'p2pkh'] as WalletProtocol,
   keyID: '0',
   counterparty: 'self' as WalletCounterparty
 };
 
 // Lock with wallet derivation
-const lockingScript = await p2pkh.lock(params);
+const lockingScript = await p2pkh.lock({ walletParams });
 
 // Unlock with SAME derivation params
-const unlockingTemplate = p2pkh.unlock(
-  protocolID: params.protocolID,
-  keyID: params.keyID,
-  counterparty: params.counterparty
-);
+const unlockingTemplate = p2pkh.unlock({
+  protocolID: walletParams.protocolID,
+  keyID: walletParams.keyID,
+  counterparty: walletParams.counterparty
+});
 ```
 
 ### ❌ Incorrect Usage
 
 ```typescript
 // Lock with direct public key
-const lockingScript = await p2pkh.lock(publicKeyHex);
+const lockingScript = await p2pkh.lock({ publicKey: publicKeyHex });
 
 // Try to unlock with different derivation params
 // This WILL FAIL even if from same private key!
-const unlockingTemplate = p2pkh.unlock(
-  [2, 'different-protocol'],  // Different protocol
-  '1',                         // Different keyID
-  'counterparty'               // Different counterparty
-);
+const unlockingTemplate = p2pkh.unlock({
+  protocolID: [2, 'different-protocol'],  // Different protocol
+  keyID: '1',                              // Different keyID
+  counterparty: 'counterparty'             // Different counterparty
+});
 ```
 
 **Why?** Each set of derivation parameters produces a different private key from the seed key -> different public key. The unlocking signature must match the exact public key hash used in the locking script.
@@ -327,11 +329,11 @@ type MyUTXO = {
 };
 
 // Later when spending
-const unlockingTemplate = p2pkh.unlock(
+const unlockingTemplate = p2pkh.unlock({
   protocolID: utxo.derivationParams.protocolID,
   keyID: utxo.derivationParams.keyID,
   counterparty: utxo.derivationParams.counterparty
-);
+});
 ```
 
 ## Examples
@@ -354,18 +356,18 @@ Update ordinal metadata without re-uploading file data:
 
 ```typescript
 // Original inscription with file
-const original = await ordP2pkh.lock(
-  params,
-  { dataB64: largeImage, contentType: 'image/png' },
-  { app: 'gallery', type: 'art', owner: 'alice' }
-);
+const original = await ordP2pkh.lock({
+  walletParams,
+  inscription: { dataB64: largeImage, contentType: 'image/png' },
+  metadata: { app: 'gallery', type: 'art', owner: 'alice' }
+});
 
 // Later: Update metadata only (saves transaction fees)
-const updated = await ordP2pkh.lock(
-  params,
-  undefined,  // No file data
-  { app: 'gallery', type: 'art', owner: 'bob', sold: 'true' }
-);
+const updated = await ordP2pkh.lock({
+  walletParams,
+  // No inscription field = no file data
+  metadata: { app: 'gallery', type: 'art', owner: 'bob', sold: 'true' }
+});
 ```
 
 ## Comparison with Official SDK
@@ -385,3 +387,8 @@ MIT
 ## Contributing
 
 Contributions are welcome! Please open an issue or submit a pull request.
+
+## Disclaimer
+
+This project is a work in progress and may change at any time.
+It is provided as-is, without any guarantees. Use at your own risk.

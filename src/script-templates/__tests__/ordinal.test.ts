@@ -21,7 +21,7 @@ describe('OrdP2PKH locking script', () => {
       const publicKeyHex = publicKey.toString();
 
       const ordP2pkh = new OrdP2PKH();
-      const lockingScript = await ordP2pkh.lock(publicKeyHex);
+      const lockingScript = await ordP2pkh.lock({ publicKey: publicKeyHex });
 
       // Verify the script contains P2PKH structure
       const scriptAsm = lockingScript.toASM();
@@ -42,7 +42,7 @@ describe('OrdP2PKH locking script', () => {
       };
 
       const ordP2pkh = new OrdP2PKH();
-      const lockingScript = await ordP2pkh.lock(publicKeyHex, inscription);
+      const lockingScript = await ordP2pkh.lock({ publicKey: publicKeyHex, inscription });
 
       // Verify the script contains ordinal envelope
       const scriptAsm = lockingScript.toASM();
@@ -66,7 +66,7 @@ describe('OrdP2PKH locking script', () => {
       };
 
       const ordP2pkh = new OrdP2PKH();
-      const lockingScript = await ordP2pkh.lock(publicKeyHex, undefined, metaData);
+      const lockingScript = await ordP2pkh.lock({ publicKey: publicKeyHex, metadata: metaData });
 
       // Verify the script contains MAP metadata
       const scriptAsm = lockingScript.toASM();
@@ -93,7 +93,7 @@ describe('OrdP2PKH locking script', () => {
       };
 
       const ordP2pkh = new OrdP2PKH();
-      const lockingScript = await ordP2pkh.lock(publicKeyHex, inscription, metaData);
+      const lockingScript = await ordP2pkh.lock({ publicKey: publicKeyHex, inscription, metadata: metaData });
 
       // Verify the script contains all components
       const scriptAsm = lockingScript.toASM();
@@ -113,8 +113,8 @@ describe('OrdP2PKH locking script', () => {
       } as MAP;
 
       const ordP2pkh = new OrdP2PKH();
-      await expect(ordP2pkh.lock(publicKeyHex, undefined, invalidMetaData))
-        .rejects.toThrow('metaData.type is required and must be a string');
+      await expect(ordP2pkh.lock({ publicKey: publicKeyHex, metadata: invalidMetaData }))
+        .rejects.toThrow('metadata.type is required and must be a string');
     });
   });
 
@@ -125,9 +125,11 @@ describe('OrdP2PKH locking script', () => {
 
       const ordP2pkh = new OrdP2PKH(wallet);
       const lockingScript = await ordP2pkh.lock({
-        protocolID: [2, 'p2pkh'] as WalletProtocol,
-        keyID: '0',
-        counterparty: 'self' as WalletCounterparty
+        walletParams: {
+          protocolID: [2, 'p2pkh'] as WalletProtocol,
+          keyID: '0',
+          counterparty: 'self' as WalletCounterparty
+        }
       });
 
       // Verify the script structure
@@ -148,14 +150,14 @@ describe('OrdP2PKH locking script', () => {
       };
 
       const ordP2pkh = new OrdP2PKH(wallet);
-      const lockingScript = await ordP2pkh.lock(
-        {
+      const lockingScript = await ordP2pkh.lock({
+        walletParams: {
           protocolID: [2, 'p2pkh'] as WalletProtocol,
           keyID: '0',
           counterparty: 'self' as WalletCounterparty
         },
         inscription
-      );
+      });
 
       // Verify the script contains ordinal envelope and P2PKH
       const scriptAsm = lockingScript.toASM();
@@ -183,13 +185,15 @@ describe('OrdP2PKH locking script', () => {
 
       // Lock with wallet
       const lockingScriptFromWallet = await ordP2pkhWithWallet.lock({
-        protocolID,
-        keyID,
-        counterparty
+        walletParams: {
+          protocolID,
+          keyID,
+          counterparty
+        }
       });
 
       // Lock with public key string
-      const lockingScriptFromPubKey = await ordP2pkhWithoutWallet.lock(publicKey);
+      const lockingScriptFromPubKey = await ordP2pkhWithoutWallet.lock({ publicKey });
 
       // Both should produce identical scripts
       expect(lockingScriptFromWallet.toHex()).toBe(lockingScriptFromPubKey.toHex());
@@ -237,7 +241,7 @@ describe('OrdP2PKH unlocking and transaction verification', () => {
     };
 
     const ordP2pkhLock = new OrdP2PKH();
-    const lockingScript = await ordP2pkhLock.lock(userLockingKey, inscription, metaData);
+    const lockingScript = await ordP2pkhLock.lock({ publicKey: userLockingKey, inscription, metadata: metaData });
 
     sourceTransaction.addOutput({
       lockingScript,
@@ -257,16 +261,16 @@ describe('OrdP2PKH unlocking and transaction verification', () => {
     spendingTx.addInput({
       sourceTransaction,
       sourceOutputIndex: 0,
-      unlockingScriptTemplate: ordP2pkhUnlock.unlock(
+      unlockingScriptTemplate: ordP2pkhUnlock.unlock({
         protocolID,
         keyID,
         counterparty
-      )
+      })
     });
 
     // Add output (send to same address)
     spendingTx.addOutput({
-      lockingScript: await ordP2pkhLock.lock(userLockingKey),
+      lockingScript: await ordP2pkhLock.lock({ publicKey: userLockingKey }),
       satoshis: 900
     });
 
@@ -288,11 +292,11 @@ describe('OrdP2PKH unlocking and transaction verification', () => {
     const counterparty = 'self' as WalletCounterparty;
 
     const ordP2pkh = new OrdP2PKH(userWallet);
-    const unlockTemplate = ordP2pkh.unlock(
+    const unlockTemplate = ordP2pkh.unlock({
       protocolID,
       keyID,
       counterparty
-    );
+    });
 
     const estimatedLength = await unlockTemplate.estimateLength();
 

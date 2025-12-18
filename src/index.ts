@@ -3,7 +3,18 @@ export {
   WalletP2PKH,
   WalletOrdP2PKH,
   type Inscription,
-  type MAP
+  type MAP,
+  // Script template parameter types
+  type P2PKHLockWithPubkeyhash,
+  type P2PKHLockWithPublicKey,
+  type P2PKHLockWithWallet,
+  type P2PKHLockParams,
+  type P2PKHUnlockParams,
+  type OrdinalLockWithPubkeyhash,
+  type OrdinalLockWithPublicKey,
+  type OrdinalLockWithWallet,
+  type OrdinalLockParams,
+  type OrdinalUnlockParams
 } from './script-templates/index.js'
 
 // Transaction Templates
@@ -11,7 +22,25 @@ export {
   TransactionTemplate,
   OutputBuilder,
   InputBuilder,
-  type BuildParams
+  type BuildParams,
+  // Transaction template parameter types - Outputs
+  type AddP2PKHOutputWithPublicKey,
+  type AddP2PKHOutputWithWallet,
+  type AddP2PKHOutputWithAutoDerivation,
+  type AddP2PKHOutputParams,
+  type AddChangeOutputWithPublicKey,
+  type AddChangeOutputWithWallet,
+  type AddChangeOutputWithAutoDerivation,
+  type AddChangeOutputParams,
+  type AddOrdinalP2PKHOutputWithPublicKey,
+  type AddOrdinalP2PKHOutputWithWallet,
+  type AddOrdinalP2PKHOutputWithAutoDerivation,
+  type AddOrdinalP2PKHOutputParams,
+  type AddCustomOutputParams,
+  // Transaction template parameter types - Inputs
+  type AddP2PKHInputParams,
+  type AddOrdinalP2PKHInputParams,
+  type AddCustomInputParams
 } from './transaction-template/index.js'
 
 // Types
