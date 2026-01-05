@@ -147,6 +147,16 @@ export class InputBuilder {
     async build(params?: BuildParams): Promise<CreateActionResult | any> {
         return this.parent.build(params);
     }
+
+    /**
+     * Preview the transaction without executing it (convenience proxy to TransactionTemplate).
+     * Equivalent to calling build({ preview: true }).
+     *
+     * @returns Promise resolving to the createAction arguments object
+     */
+    async preview(): Promise<any> {
+        return this.parent.build({ preview: true });
+    }
 }
 
 /**
@@ -306,6 +316,16 @@ export class OutputBuilder {
      */
     async build(params?: BuildParams): Promise<CreateActionResult | any> {
         return this.parent.build(params);
+    }
+
+    /**
+     * Preview the transaction without executing it (convenience proxy to TransactionTemplate).
+     * Equivalent to calling build({ preview: true }).
+     *
+     * @returns Promise resolving to the createAction arguments object
+     */
+    async preview(): Promise<any> {
+        return this.parent.build({ preview: true });
     }
 }
 
@@ -1080,5 +1100,15 @@ export class TransactionTemplate {
             txid: result.txid,
             tx: result.tx,
         };
+    }
+
+    /**
+     * Preview the transaction without executing it.
+     * Equivalent to calling build({ preview: true }).
+     *
+     * @returns Promise resolving to the createAction arguments object
+     */
+    async preview(): Promise<any> {
+        return this.build({ preview: true });
     }
 }
