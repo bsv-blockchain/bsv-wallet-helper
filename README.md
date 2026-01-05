@@ -139,6 +139,8 @@ const lockingScript = await ordP2pkh.lock({
 });
 ```
 
+**Note:** For wallet compatible multisig scripts see 'https://github.com/bsv-blockchain/ts-templates'.
+
 ### Types
 
 #### `WalletDerivationParams`

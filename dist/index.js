@@ -122,23 +122,19 @@ var P2PKH = class {
   constructor(wallet) {
     this.wallet = wallet;
   }
-  async lock(pubkeyhashOrWalletParams) {
+  async lock(params) {
     let data;
-    if (!pubkeyhashOrWalletParams && !this.wallet) {
-      throw new Error("pubkeyhash or wallet is required");
-    }
-    if (typeof pubkeyhashOrWalletParams === "string") {
-      const pubKeyToHash = import_sdk2.PublicKey.fromString(pubkeyhashOrWalletParams);
-      const hash = pubKeyToHash.toHash();
-      data = hash;
-    } else if (Array.isArray(pubkeyhashOrWalletParams)) {
-      data = pubkeyhashOrWalletParams;
-    } else if (pubkeyhashOrWalletParams) {
-      validateWalletDerivationParams(pubkeyhashOrWalletParams, "wallet derivation parameters");
+    if ("pubkeyhash" in params) {
+      data = params.pubkeyhash;
+    } else if ("publicKey" in params) {
+      const pubKeyToHash = import_sdk2.PublicKey.fromString(params.publicKey);
+      data = pubKeyToHash.toHash();
+    } else if ("walletParams" in params) {
+      validateWalletDerivationParams(params.walletParams, "walletParams");
       if (!this.wallet) {
-        throw new Error("Wallet is required when using wallet derivation parameters");
+        throw new Error("Wallet is required when using walletParams");
       }
-      const { protocolID, keyID, counterparty = "self" } = pubkeyhashOrWalletParams;
+      const { protocolID, keyID, counterparty = "self" } = params.walletParams;
       const { publicKey } = await this.wallet.getPublicKey({
         protocolID,
         keyID,
@@ -147,16 +143,7 @@ var P2PKH = class {
       const pubKeyToHash = import_sdk2.PublicKey.fromString(publicKey);
       data = pubKeyToHash.toHash();
     } else {
-      if (!this.wallet) {
-        throw new Error("pubkeyhash or wallet is required");
-      }
-      const { publicKey } = await this.wallet.getPublicKey({
-        protocolID: [2, "p2pkh"],
-        keyID: "0",
-        counterparty: "self"
-      });
-      const pubKeyToHash = import_sdk2.PublicKey.fromString(publicKey);
-      data = pubKeyToHash.toHash();
+      throw new Error("One of pubkeyhash, publicKey, or walletParams is required");
     }
     if (!data || data.length !== 20) {
       throw new Error("Failed to generate valid public key hash (must be 20 bytes)");
@@ -178,19 +165,27 @@ var P2PKH = class {
    *    to create a signature following the BRC-29 pattern.
    * 2. `estimateLength` - A function that returns the estimated length of the unlocking script (108 bytes).
    *
-   * @param protocolID - Protocol identifier for key derivation (default: [2, "p2pkh"])
-   * @param keyID - Specific key identifier within the protocol (default: '0')
-   * @param counterparty - The counterparty for which the key is being used (default: 'self')
-   * @param signOutputs - The signature scope for outputs: 'all', 'none', or 'single' (default: 'all')
-   * @param anyoneCanPay - Flag indicating if the signature allows for other inputs to be added later (default: false)
-   * @param sourceSatoshis - Optional. The amount in satoshis being unlocked. Otherwise input.sourceTransaction is required.
-   * @param lockingScript - Optional. The locking script being unlocked. Otherwise input.sourceTransaction is required.
+   * @param params - Named parameters object
+   * @param params.protocolID - Protocol identifier for key derivation (default: [2, "p2pkh"])
+   * @param params.keyID - Specific key identifier within the protocol (default: '0')
+   * @param params.counterparty - The counterparty for which the key is being used (default: 'self')
+   * @param params.signOutputs - The signature scope for outputs: 'all', 'none', or 'single' (default: 'all')
+   * @param params.anyoneCanPay - Flag indicating if the signature allows for other inputs to be added later (default: false)
+   * @param params.sourceSatoshis - Optional. The amount in satoshis being unlocked. Otherwise input.sourceTransaction is required.
+   * @param params.lockingScript - Optional. The locking script being unlocked. Otherwise input.sourceTransaction is required.
    * @returns An object containing the `sign` and `estimateLength` functions
    */
-  unlock(protocolID = [2, "p2pkh"], keyID = "0", counterparty = "self", signOutputs = "all", anyoneCanPay = false, sourceSatoshis, lockingScript) {
+  unlock(params) {
     if (!this.wallet) {
       throw new Error("Wallet is required for unlocking");
     }
+    const protocolID = params?.protocolID ?? [2, "p2pkh"];
+    const keyID = params?.keyID ?? "0";
+    const counterparty = params?.counterparty ?? "self";
+    const signOutputs = params?.signOutputs ?? "all";
+    const anyoneCanPay = params?.anyoneCanPay ?? false;
+    const sourceSatoshis = params?.sourceSatoshis;
+    const lockingScript = params?.lockingScript;
     if (!Array.isArray(protocolID) || protocolID.length !== 2) {
       throw new Error("protocolID must be an array of [number, string]");
     }
@@ -261,59 +256,56 @@ var OrdP2PKH = class {
   constructor(wallet) {
     this.p2pkh = new P2PKH(wallet);
   }
-  async lock(pubkeyhashOrWalletParams, inscription, metaData) {
-    if (inscription !== void 0) {
-      if (typeof inscription !== "object" || inscription === null) {
+  async lock(params) {
+    if (params.inscription !== void 0) {
+      if (typeof params.inscription !== "object" || params.inscription === null) {
         throw new Error("inscription must be an object with dataB64 and contentType properties");
       }
-      if (!inscription.dataB64 || typeof inscription.dataB64 !== "string") {
+      if (!params.inscription.dataB64 || typeof params.inscription.dataB64 !== "string") {
         throw new Error("inscription.dataB64 is required and must be a base64 string");
       }
-      if (!inscription.contentType || typeof inscription.contentType !== "string") {
+      if (!params.inscription.contentType || typeof params.inscription.contentType !== "string") {
         throw new Error("inscription.contentType is required and must be a string (MIME type)");
       }
     }
-    if (metaData !== void 0) {
-      if (typeof metaData !== "object" || metaData === null) {
-        throw new Error("metaData must be an object");
+    if (params.metadata !== void 0) {
+      if (typeof params.metadata !== "object" || params.metadata === null) {
+        throw new Error("metadata must be an object");
       }
-      if (!metaData.app || typeof metaData.app !== "string") {
-        throw new Error("metaData.app is required and must be a string");
+      if (!params.metadata.app || typeof params.metadata.app !== "string") {
+        throw new Error("metadata.app is required and must be a string");
       }
-      if (!metaData.type || typeof metaData.type !== "string") {
-        throw new Error("metaData.type is required and must be a string");
+      if (!params.metadata.type || typeof params.metadata.type !== "string") {
+        throw new Error("metadata.type is required and must be a string");
       }
     }
     let lockingScript;
-    if (typeof pubkeyhashOrWalletParams === "string" || Array.isArray(pubkeyhashOrWalletParams)) {
-      lockingScript = await this.p2pkh.lock(pubkeyhashOrWalletParams);
+    if ("pubkeyhash" in params) {
+      lockingScript = await this.p2pkh.lock({ pubkeyhash: params.pubkeyhash });
+    } else if ("publicKey" in params) {
+      lockingScript = await this.p2pkh.lock({ publicKey: params.publicKey });
+    } else if ("walletParams" in params) {
+      lockingScript = await this.p2pkh.lock({ walletParams: params.walletParams });
     } else {
-      lockingScript = await this.p2pkh.lock(pubkeyhashOrWalletParams);
+      throw new Error("One of pubkeyhash, publicKey, or walletParams is required");
     }
-    return applyInscription(lockingScript, inscription, metaData);
+    return applyInscription(lockingScript, params.inscription, params.metadata);
   }
   /**
    * Creates a function that generates a P2PKH unlocking script using the instance's BRC-100 wallet.
    *
-   * @param protocolID - Protocol identifier for key derivation (default: [2, "p2pkh"])
-   * @param keyID - Specific key identifier within the protocol (default: '0')
-   * @param counterparty - The counterparty for which the key is being used (default: 'self')
-   * @param signOutputs - The signature scope for outputs: 'all', 'none', or 'single' (default: 'all')
-   * @param anyoneCanPay - Flag indicating if the signature allows for other inputs to be added later (default: false)
-   * @param sourceSatoshis - Optional. The amount in satoshis being unlocked. Otherwise input.sourceTransaction is required.
-   * @param lockingScript - Optional. The locking script being unlocked. Otherwise input.sourceTransaction is required.
+   * @param params - Named parameters object (see P2PKH.unlock for details)
+   * @param params.protocolID - Protocol identifier for key derivation (default: [2, "p2pkh"])
+   * @param params.keyID - Specific key identifier within the protocol (default: '0')
+   * @param params.counterparty - The counterparty for which the key is being used (default: 'self')
+   * @param params.signOutputs - The signature scope for outputs: 'all', 'none', or 'single' (default: 'all')
+   * @param params.anyoneCanPay - Flag indicating if the signature allows for other inputs to be added later (default: false)
+   * @param params.sourceSatoshis - Optional. The amount in satoshis being unlocked. Otherwise input.sourceTransaction is required.
+   * @param params.lockingScript - Optional. The locking script being unlocked. Otherwise input.sourceTransaction is required.
    * @returns An object containing the `sign` and `estimateLength` functions
    */
-  unlock(protocolID, keyID, counterparty = "self", signOutputs = "all", anyoneCanPay = false, sourceSatoshis, lockingScript) {
-    return this.p2pkh.unlock(
-      protocolID,
-      keyID,
-      counterparty,
-      signOutputs,
-      anyoneCanPay,
-      sourceSatoshis,
-      lockingScript
-    );
+  unlock(params) {
+    return this.p2pkh.unlock(params);
   }
 };
 var applyInscription = (lockingScript, inscription, metaData, withSeparator = false) => {
@@ -456,10 +448,12 @@ function getDerivation() {
   };
 }
 
-// src/transaction-template/transaction.ts
+// src/transaction-template/types/type-guards.ts
 function isDerivationParams(value) {
   return typeof value === "object" && value !== null && !Array.isArray(value);
 }
+
+// src/transaction-template/transaction.ts
 var InputBuilder = class {
   constructor(parent, inputConfig) {
     this.parent = parent;
@@ -481,118 +475,65 @@ var InputBuilder = class {
   /**
    * Adds a P2PKH input to the transaction.
    *
-   * @param sourceTransaction - The source transaction containing the output to spend
-   * @param sourceOutputIndex - The index of the output in the source transaction
-   * @param walletParams - Optional wallet derivation parameters
-   * @param description - Optional description for this input
-   * @param signOutputs - Signature scope: 'all', 'none', or 'single' (default: 'all')
-   * @param anyoneCanPay - Allow other inputs to be added later (default: false)
-   * @param sourceSatoshis - Optional amount in satoshis
-   * @param lockingScript - Optional locking script
+   * @param params - Object containing input parameters
    * @returns A new InputBuilder for the new input
    */
-  addP2PKHInput(sourceTransaction, sourceOutputIndex, walletParams, description, signOutputs = "all", anyoneCanPay = false, sourceSatoshis, lockingScript) {
-    return this.parent.addP2PKHInput(
-      sourceTransaction,
-      sourceOutputIndex,
-      walletParams,
-      description,
-      signOutputs,
-      anyoneCanPay,
-      sourceSatoshis,
-      lockingScript
-    );
+  addP2PKHInput(params) {
+    return this.parent.addP2PKHInput(params);
   }
   /**
    * Adds an ordinalP2PKH input to the transaction.
    *
-   * @param sourceTransaction - The source transaction containing the output to spend
-   * @param sourceOutputIndex - The index of the output in the source transaction
-   * @param walletParams - Optional wallet derivation parameters
-   * @param description - Optional description for this input
-   * @param signOutputs - Signature scope: 'all', 'none', or 'single' (default: 'all')
-   * @param anyoneCanPay - Allow other inputs to be added later (default: false)
-   * @param sourceSatoshis - Optional amount in satoshis
-   * @param lockingScript - Optional locking script
+   * @param params - Object containing input parameters
    * @returns A new InputBuilder for the new input
    */
-  addOrdinalP2PKHInput(sourceTransaction, sourceOutputIndex, walletParams, description, signOutputs = "all", anyoneCanPay = false, sourceSatoshis, lockingScript) {
-    return this.parent.addOrdinalP2PKHInput(
-      sourceTransaction,
-      sourceOutputIndex,
-      walletParams,
-      description,
-      signOutputs,
-      anyoneCanPay,
-      sourceSatoshis,
-      lockingScript
-    );
+  addOrdinalP2PKHInput(params) {
+    return this.parent.addOrdinalP2PKHInput(params);
   }
   /**
    * Adds a custom input with a pre-built unlocking script template.
    *
-   * @param unlockingScriptTemplate - The unlocking script template for this input
-   * @param sourceTransaction - The source transaction containing the output to spend
-   * @param sourceOutputIndex - The index of the output in the source transaction
-   * @param description - Optional description for this input
-   * @param sourceSatoshis - Optional amount in satoshis
-   * @param lockingScript - Optional locking script
+   * @param params - Object containing input parameters
    * @returns A new InputBuilder for the new input
    */
-  addCustomInput(unlockingScriptTemplate, sourceTransaction, sourceOutputIndex, description, sourceSatoshis, lockingScript) {
-    return this.parent.addCustomInput(
-      unlockingScriptTemplate,
-      sourceTransaction,
-      sourceOutputIndex,
-      description,
-      sourceSatoshis,
-      lockingScript
-    );
+  addCustomInput(params) {
+    return this.parent.addCustomInput(params);
   }
   /**
    * Adds a P2PKH output to the transaction.
    *
-   * @param addressOrParams - Public key hex string or wallet derivation parameters
-   * @param satoshis - Amount in satoshis for this output
-   * @param description - Optional description for this output
+   * @param params - Object with publicKey/walletParams, satoshis, and optional description
    * @returns A new OutputBuilder for the new output
    */
-  addP2PKHOutput(addressOrParams, satoshis, description) {
-    return this.parent.addP2PKHOutput(addressOrParams, satoshis, description);
+  addP2PKHOutput(params) {
+    return this.parent.addP2PKHOutput(params);
   }
   /**
    * Adds a change output that automatically calculates the change amount.
    *
-   * @param addressOrParams - Public key hex or wallet derivation parameters
-   * @param description - Optional description for this output
+   * @param params - Optional object with publicKey/walletParams and description
    * @returns A new OutputBuilder for the new output
    */
-  addChangeOutput(addressOrParams, description) {
-    return this.parent.addChangeOutput(addressOrParams, description);
+  addChangeOutput(params) {
+    return this.parent.addChangeOutput(params);
   }
   /**
    * Adds an ordinalP2PKH (1Sat Ordinal + P2PKH) output to the transaction.
    *
-   * @param addressOrParams - Public key hex string or wallet derivation parameters
-   * @param satoshis - Amount in satoshis for this output (typically 1 for ordinals)
-   * @param inscription - Optional inscription data (dataB64, contentType)
-   * @param metadata - Optional MAP metadata (app, type, and custom properties)
-   * @param description - Optional description for this output
+   * @param params - Object with publicKey/walletParams, satoshis, and optional inscription, metadata, description
    * @returns A new OutputBuilder for the new output
    */
-  addOrdinalP2PKHOutput(addressOrParams, satoshis, inscription, metadata, description) {
-    return this.parent.addOrdinalP2PKHOutput(addressOrParams, satoshis, inscription, metadata, description);
+  addOrdinalP2PKHOutput(params) {
+    return this.parent.addOrdinalP2PKHOutput(params);
   }
   /**
    * Adds a custom output with a pre-built locking script.
    *
-   * @param lockingScript - The locking script for this output
-   * @param satoshis - Amount in satoshis for this output
-   * @param description - Optional description for this output
+   * @param params - Object with lockingScript, satoshis, and optional description
    * @returns A new OutputBuilder for the new output
    */
-  addCustomOutput(lockingScript, satoshis, description) {
-    return this.parent.addCustomOutput(lockingScript, satoshis, description);
+  addCustomOutput(params) {
+    return this.parent.addCustomOutput(params);
   }
   /**
    * Sets transaction-level options (convenience proxy to TransactionTemplate).
@@ -611,6 +552,15 @@ var InputBuilder = class {
    */
   async build(params) {
     return this.parent.build(params);
+  }
+  /**
+   * Preview the transaction without executing it (convenience proxy to TransactionTemplate).
+   * Equivalent to calling build({ preview: true }).
+   *
+   * @returns Promise resolving to the createAction arguments object
+   */
+  async preview() {
+    return this.parent.build({ preview: true });
   }
 };
 var OutputBuilder = class {
@@ -660,132 +610,65 @@ var OutputBuilder = class {
   /**
    * Adds a P2PKH output to the transaction.
    *
-   * @param addressOrParams - Public key hex string or wallet derivation parameters. If omitted, uses BRC-29 derivation scheme.
-   * @param satoshis - Amount in satoshis for this output
-   * @param description - Optional description for this output
+   * @param params - Object with publicKey/walletParams, satoshis, and optional description
    * @returns A new OutputBuilder for the new output
    */
-  addP2PKHOutput(addressOrParams, satoshis, description) {
-    return this.parent.addP2PKHOutput(
-      addressOrParams,
-      satoshis,
-      description
-    );
+  addP2PKHOutput(params) {
+    return this.parent.addP2PKHOutput(params);
   }
   /**
    * Adds a change output that automatically calculates the change amount.
    *
-   * @param addressOrParams - Public key hex or wallet derivation parameters. If omitted, uses BRC-29 derivation scheme.
-   * @param description - Optional description for this output
+   * @param params - Optional object with publicKey/walletParams and description
    * @returns A new OutputBuilder for the new output
    */
-  addChangeOutput(addressOrParams, description) {
-    return this.parent.addChangeOutput(addressOrParams, description);
+  addChangeOutput(params) {
+    return this.parent.addChangeOutput(params);
   }
   /**
    * Adds a P2PKH input to the transaction.
    *
-   * @param sourceTransaction - The source transaction containing the output to spend
-   * @param sourceOutputIndex - The index of the output in the source transaction
-   * @param walletParams - Optional wallet derivation parameters (defaults to BRC-29 derivation scheme with counterparty 'self')
-   * @param description - Optional description for this input
-   * @param signOutputs - Signature scope: 'all', 'none', or 'single' (default: 'all')
-   * @param anyoneCanPay - Allow other inputs to be added later (default: false)
-   * @param sourceSatoshis - Optional amount in satoshis (otherwise requires sourceTransaction)
-   * @param lockingScript - Optional locking script (otherwise requires sourceTransaction)
+   * @param params - Object containing input parameters
    * @returns A new InputBuilder for the new input
    */
-  addP2PKHInput(sourceTransaction, sourceOutputIndex, walletParams, description, signOutputs = "all", anyoneCanPay = false, sourceSatoshis, lockingScript) {
-    return this.parent.addP2PKHInput(
-      sourceTransaction,
-      sourceOutputIndex,
-      walletParams,
-      description,
-      signOutputs,
-      anyoneCanPay,
-      sourceSatoshis,
-      lockingScript
-    );
+  addP2PKHInput(params) {
+    return this.parent.addP2PKHInput(params);
   }
   /**
    * Adds an ordinalP2PKH input to the transaction.
    *
-   * @param sourceTransaction - The source transaction containing the output to spend
-   * @param sourceOutputIndex - The index of the output in the source transaction
-   * @param walletParams - Optional wallet derivation parameters (defaults to BRC-29 derivation scheme with counterparty 'self')
-   * @param description - Optional description for this input
-   * @param signOutputs - Signature scope: 'all', 'none', or 'single' (default: 'all')
-   * @param anyoneCanPay - Allow other inputs to be added later (default: false)
-   * @param sourceSatoshis - Optional amount in satoshis (otherwise requires sourceTransaction)
-   * @param lockingScript - Optional locking script (otherwise requires sourceTransaction)
+   * @param params - Object containing input parameters
    * @returns A new InputBuilder for the new input
    */
-  addOrdinalP2PKHInput(sourceTransaction, sourceOutputIndex, walletParams, description, signOutputs = "all", anyoneCanPay = false, sourceSatoshis, lockingScript) {
-    return this.parent.addOrdinalP2PKHInput(
-      sourceTransaction,
-      sourceOutputIndex,
-      walletParams,
-      description,
-      signOutputs,
-      anyoneCanPay,
-      sourceSatoshis,
-      lockingScript
-    );
+  addOrdinalP2PKHInput(params) {
+    return this.parent.addOrdinalP2PKHInput(params);
   }
   /**
    * Adds a custom input with a pre-built unlocking script template.
    *
-   * @param unlockingScriptTemplate - The unlocking script template for this input
-   * @param sourceTransaction - The source transaction containing the output to spend
-   * @param sourceOutputIndex - The index of the output in the source transaction
-   * @param description - Optional description for this input
-   * @param sourceSatoshis - Optional amount in satoshis
-   * @param lockingScript - Optional locking script
+   * @param params - Object containing input parameters
    * @returns A new InputBuilder for the new input
    */
-  addCustomInput(unlockingScriptTemplate, sourceTransaction, sourceOutputIndex, description, sourceSatoshis, lockingScript) {
-    return this.parent.addCustomInput(
-      unlockingScriptTemplate,
-      sourceTransaction,
-      sourceOutputIndex,
-      description,
-      sourceSatoshis,
-      lockingScript
-    );
+  addCustomInput(params) {
+    return this.parent.addCustomInput(params);
   }
   /**
    * Adds an ordinalP2PKH (1Sat Ordinal + P2PKH) output to the transaction.
    *
-   * @param addressOrParams - Public key hex string or wallet derivation parameters
-   * @param satoshis - Amount in satoshis for this output (typically 1 for ordinals)
-   * @param inscription - Optional inscription data (dataB64, contentType)
-   * @param metadata - Optional MAP metadata (app, type, and custom properties)
-   * @param description - Optional description for this output
+   * @param params - Object with publicKey/walletParams, satoshis, and optional inscription, metadata, description
    * @returns A new OutputBuilder for the new output
    */
-  addOrdinalP2PKHOutput(addressOrParams, satoshis, inscription, metadata, description) {
-    return this.parent.addOrdinalP2PKHOutput(
-      addressOrParams,
-      satoshis,
-      inscription,
-      metadata,
-      description
-    );
+  addOrdinalP2PKHOutput(params) {
+    return this.parent.addOrdinalP2PKHOutput(params);
   }
   /**
    * Adds a custom output with a pre-built locking script.
    *
-   * @param lockingScript - The locking script for this output
-   * @param satoshis - Amount in satoshis for this output
-   * @param description - Optional description for this output
+   * @param params - Object with lockingScript, satoshis, and optional description
    * @returns A new OutputBuilder for the new output
    */
-  addCustomOutput(lockingScript, satoshis, description) {
-    return this.parent.addCustomOutput(
-      lockingScript,
-      satoshis,
-      description
-    );
+  addCustomOutput(params) {
+    return this.parent.addCustomOutput(params);
   }
   /**
    * Sets the description for THIS output only.
@@ -817,6 +700,15 @@ var OutputBuilder = class {
    */
   async build(params) {
     return this.parent.build(params);
+  }
+  /**
+   * Preview the transaction without executing it (convenience proxy to TransactionTemplate).
+   * Equivalent to calling build({ preview: true }).
+   *
+   * @returns Promise resolving to the createAction arguments object
+   */
+  async preview() {
+    return this.parent.build({ preview: true });
   }
 };
 var TransactionTemplate = class {
@@ -916,33 +808,34 @@ var TransactionTemplate = class {
   /**
    * Adds a P2PKH input to the transaction.
    *
-   * @param sourceTransaction - The source transaction containing the output to spend
-   * @param sourceOutputIndex - The index of the output in the source transaction
-   * @param walletParams - Optional wallet derivation parameters (defaults to BRC-29 derivation scheme with counterparty 'self')
-   * @param description - Optional description for this input
-   * @param signOutputs - Signature scope: 'all', 'none', or 'single' (default: 'all')
-   * @param anyoneCanPay - Allow other inputs to be added later (default: false)
-   * @param sourceSatoshis - Optional amount in satoshis (otherwise requires sourceTransaction)
-   * @param lockingScript - Optional locking script (otherwise requires sourceTransaction)
+   * @param params - Object containing input parameters
+   * @param params.sourceTransaction - The source transaction containing the output to spend
+   * @param params.sourceOutputIndex - The index of the output in the source transaction
+   * @param params.walletParams - Optional wallet derivation parameters
+   * @param params.description - Optional description for this input
+   * @param params.signOutputs - Signature scope: 'all', 'none', or 'single' (default: 'all')
+   * @param params.anyoneCanPay - Allow other inputs to be added later (default: false)
+   * @param params.sourceSatoshis - Optional amount in satoshis
+   * @param params.lockingScript - Optional locking script
    * @returns An InputBuilder for the new input
    */
-  addP2PKHInput(sourceTransaction, sourceOutputIndex, walletParams, description, signOutputs = "all", anyoneCanPay = false, sourceSatoshis, lockingScript) {
-    if (typeof sourceOutputIndex !== "number" || sourceOutputIndex < 0) {
+  addP2PKHInput(params) {
+    if (typeof params.sourceOutputIndex !== "number" || params.sourceOutputIndex < 0) {
       throw new Error("sourceOutputIndex must be a non-negative number");
     }
-    if (description !== void 0 && typeof description !== "string") {
+    if (params.description !== void 0 && typeof params.description !== "string") {
       throw new Error("description must be a string");
     }
     const inputConfig = {
       type: "p2pkh",
-      sourceTransaction,
-      sourceOutputIndex,
-      description,
-      walletParams,
-      signOutputs,
-      anyoneCanPay,
-      sourceSatoshis,
-      lockingScript
+      sourceTransaction: params.sourceTransaction,
+      sourceOutputIndex: params.sourceOutputIndex,
+      description: params.description,
+      walletParams: params.walletParams,
+      signOutputs: params.signOutputs ?? "all",
+      anyoneCanPay: params.anyoneCanPay ?? false,
+      sourceSatoshis: params.sourceSatoshis,
+      lockingScript: params.lockingScript
     };
     this.inputs.push(inputConfig);
     return new InputBuilder(this, inputConfig);
@@ -950,33 +843,34 @@ var TransactionTemplate = class {
   /**
    * Adds an ordinalP2PKH input to the transaction.
    *
-   * @param sourceTransaction - The source transaction containing the output to spend
-   * @param sourceOutputIndex - The index of the output in the source transaction
-   * @param walletParams - Optional wallet derivation parameters (defaults to BRC-29 derivation scheme with counterparty 'self')
-   * @param description - Optional description for this input
-   * @param signOutputs - Signature scope: 'all', 'none', or 'single' (default: 'all')
-   * @param anyoneCanPay - Allow other inputs to be added later (default: false)
-   * @param sourceSatoshis - Optional amount in satoshis (otherwise requires sourceTransaction)
-   * @param lockingScript - Optional locking script (otherwise requires sourceTransaction)
+   * @param params - Object containing input parameters
+   * @param params.sourceTransaction - The source transaction containing the output to spend
+   * @param params.sourceOutputIndex - The index of the output in the source transaction
+   * @param params.walletParams - Optional wallet derivation parameters
+   * @param params.description - Optional description for this input
+   * @param params.signOutputs - Signature scope: 'all', 'none', or 'single' (default: 'all')
+   * @param params.anyoneCanPay - Allow other inputs to be added later (default: false)
+   * @param params.sourceSatoshis - Optional amount in satoshis
+   * @param params.lockingScript - Optional locking script
    * @returns An InputBuilder for the new input
    */
-  addOrdinalP2PKHInput(sourceTransaction, sourceOutputIndex, walletParams, description, signOutputs = "all", anyoneCanPay = false, sourceSatoshis, lockingScript) {
-    if (typeof sourceOutputIndex !== "number" || sourceOutputIndex < 0) {
+  addOrdinalP2PKHInput(params) {
+    if (typeof params.sourceOutputIndex !== "number" || params.sourceOutputIndex < 0) {
       throw new Error("sourceOutputIndex must be a non-negative number");
     }
-    if (description !== void 0 && typeof description !== "string") {
+    if (params.description !== void 0 && typeof params.description !== "string") {
       throw new Error("description must be a string");
     }
     const inputConfig = {
       type: "ordinalP2PKH",
-      sourceTransaction,
-      sourceOutputIndex,
-      description,
-      walletParams,
-      signOutputs,
-      anyoneCanPay,
-      sourceSatoshis,
-      lockingScript
+      sourceTransaction: params.sourceTransaction,
+      sourceOutputIndex: params.sourceOutputIndex,
+      description: params.description,
+      walletParams: params.walletParams,
+      signOutputs: params.signOutputs ?? "all",
+      anyoneCanPay: params.anyoneCanPay ?? false,
+      sourceSatoshis: params.sourceSatoshis,
+      lockingScript: params.lockingScript
     };
     this.inputs.push(inputConfig);
     return new InputBuilder(this, inputConfig);
@@ -984,105 +878,115 @@ var TransactionTemplate = class {
   /**
    * Adds a custom input with a pre-built unlocking script template.
    *
-   * @param unlockingScriptTemplate - The unlocking script template for this input
-   * @param sourceTransaction - The source transaction containing the output to spend
-   * @param sourceOutputIndex - The index of the output in the source transaction
-   * @param description - Optional description for this input
-   * @param sourceSatoshis - Optional amount in satoshis
-   * @param lockingScript - Optional locking script
+   * @param params - Object containing input parameters
+   * @param params.unlockingScriptTemplate - The unlocking script template for this input
+   * @param params.sourceTransaction - The source transaction containing the output to spend
+   * @param params.sourceOutputIndex - The index of the output in the source transaction
+   * @param params.description - Optional description for this input
+   * @param params.sourceSatoshis - Optional amount in satoshis
+   * @param params.lockingScript - Optional locking script
    * @returns An InputBuilder for the new input
    */
-  addCustomInput(unlockingScriptTemplate, sourceTransaction, sourceOutputIndex, description, sourceSatoshis, lockingScript) {
-    if (!unlockingScriptTemplate) {
+  addCustomInput(params) {
+    if (!params.unlockingScriptTemplate) {
       throw new Error("unlockingScriptTemplate is required for custom input");
     }
-    if (typeof sourceOutputIndex !== "number" || sourceOutputIndex < 0) {
+    if (typeof params.sourceOutputIndex !== "number" || params.sourceOutputIndex < 0) {
       throw new Error("sourceOutputIndex must be a non-negative number");
     }
-    if (description !== void 0 && typeof description !== "string") {
+    if (params.description !== void 0 && typeof params.description !== "string") {
       throw new Error("description must be a string");
     }
     const inputConfig = {
       type: "custom",
-      unlockingScriptTemplate,
-      sourceTransaction,
-      sourceOutputIndex,
-      description,
-      sourceSatoshis,
-      lockingScript
+      unlockingScriptTemplate: params.unlockingScriptTemplate,
+      sourceTransaction: params.sourceTransaction,
+      sourceOutputIndex: params.sourceOutputIndex,
+      description: params.description,
+      sourceSatoshis: params.sourceSatoshis,
+      lockingScript: params.lockingScript
     };
     this.inputs.push(inputConfig);
     return new InputBuilder(this, inputConfig);
   }
   /**
-   * Adds a P2PKH (Pay To Public Key Hash) output to the transaction.
+   * Adds a P2PKH output to the transaction.
    *
-   * @param addressOrParams - Public key hex string or wallet derivation parameters. If omitted, uses BRC-29 derivation scheme.
-   * @param satoshis - Amount in satoshis for this output
-   * @param description - Optional description for this output
-   * @returns An OutputBuilder for configuring this output (e.g., adding OP_RETURN)
+   * @param params - Object containing output parameters
+   * @returns An OutputBuilder for configuring this output
    */
-  addP2PKHOutput(addressOrParams, satoshis, description) {
-    if (typeof satoshis !== "number" || satoshis < 0) {
+  addP2PKHOutput(params) {
+    if (typeof params.satoshis !== "number" || params.satoshis < 0) {
       throw new Error("satoshis must be a non-negative number");
     }
-    if (description !== void 0 && typeof description !== "string") {
+    if (params.description !== void 0 && typeof params.description !== "string") {
       throw new Error("description must be a string");
+    }
+    let addressOrParams;
+    if ("publicKey" in params) {
+      addressOrParams = params.publicKey;
+    } else if ("walletParams" in params) {
+      addressOrParams = params.walletParams;
     }
     const outputConfig = {
       type: "p2pkh",
-      satoshis,
-      description,
+      satoshis: params.satoshis,
+      description: params.description,
       addressOrParams
     };
     this.outputs.push(outputConfig);
     return new OutputBuilder(this, outputConfig);
   }
   /**
-   * Adds a change output that automatically calculates the change amount during transaction signing.
+   * Adds a change output to the transaction.
    *
-   * The satoshi amount is calculated as: inputs - outputs - fees
-   *
-   * @param addressOrParams - Public key hex string or wallet derivation parameters. If omitted, uses BRC-29 derivation scheme.
-   * @param description - Optional description for this output (default: "Change")
-   * @returns An OutputBuilder for configuring this output (e.g., adding OP_RETURN)
+   * @param params - Optional object containing output parameters
+   * @returns An OutputBuilder for configuring this output
    */
-  addChangeOutput(addressOrParams, description) {
-    if (description !== void 0 && typeof description !== "string") {
+  addChangeOutput(params) {
+    if (params?.description !== void 0 && typeof params.description !== "string") {
       throw new Error("description must be a string");
+    }
+    let addressOrParams;
+    if (params && "publicKey" in params) {
+      addressOrParams = params.publicKey;
+    } else if (params && "walletParams" in params) {
+      addressOrParams = params.walletParams;
     }
     const outputConfig = {
       type: "change",
-      description: description || "Change",
+      description: params?.description || "Change",
       addressOrParams
     };
     this.outputs.push(outputConfig);
     return new OutputBuilder(this, outputConfig);
   }
   /**
-   * Adds an ordinalP2PKH (1Sat Ordinal + P2PKH) output to the transaction.
+   * Adds an ordinalP2PKH output to the transaction.
    *
-   * @param addressOrParams - Public key hex string or wallet derivation parameters. If omitted, uses BRC-29 derivation scheme.
-   * @param satoshis - Amount in satoshis for this output (typically 1 for ordinals)
-   * @param inscription - Optional inscription data with base64 file data and content type
-   * @param metadata - Optional MAP metadata with app, type, and custom properties
-   * @param description - Optional description for this output
-   * @returns An OutputBuilder for configuring this output (e.g., adding OP_RETURN)
+   * @param params - Object containing output parameters
+   * @returns An OutputBuilder for configuring this output
    */
-  addOrdinalP2PKHOutput(addressOrParams, satoshis, inscription, metadata, description) {
-    if (typeof satoshis !== "number" || satoshis < 0) {
+  addOrdinalP2PKHOutput(params) {
+    if (typeof params.satoshis !== "number" || params.satoshis < 0) {
       throw new Error("satoshis must be a non-negative number");
     }
-    if (description !== void 0 && typeof description !== "string") {
+    if (params.description !== void 0 && typeof params.description !== "string") {
       throw new Error("description must be a string");
+    }
+    let addressOrParams;
+    if ("publicKey" in params) {
+      addressOrParams = params.publicKey;
+    } else if ("walletParams" in params) {
+      addressOrParams = params.walletParams;
     }
     const outputConfig = {
       type: "ordinalP2PKH",
-      satoshis,
-      description,
+      satoshis: params.satoshis,
+      description: params.description,
       addressOrParams,
-      inscription,
-      metadata
+      inscription: params.inscription,
+      metadata: params.metadata
     };
     this.outputs.push(outputConfig);
     return new OutputBuilder(this, outputConfig);
@@ -1093,26 +997,24 @@ var TransactionTemplate = class {
    * This is useful for advanced use cases where you need to use a locking script
    * that isn't directly supported by the builder methods.
    *
-   * @param lockingScript - The locking script for this output
-   * @param satoshis - Amount in satoshis for this output
-   * @param description - Optional description for this output
+   * @param params - Object containing lockingScript, satoshis, and optional description
    * @returns An OutputBuilder for configuring this output
    */
-  addCustomOutput(lockingScript, satoshis, description) {
-    if (!lockingScript || typeof lockingScript.toHex !== "function") {
+  addCustomOutput(params) {
+    if (!params.lockingScript || typeof params.lockingScript.toHex !== "function") {
       throw new Error("lockingScript must be a LockingScript instance");
     }
-    if (typeof satoshis !== "number" || satoshis < 0) {
+    if (typeof params.satoshis !== "number" || params.satoshis < 0) {
       throw new Error("satoshis must be a non-negative number");
     }
-    if (description !== void 0 && typeof description !== "string") {
+    if (params.description !== void 0 && typeof params.description !== "string") {
       throw new Error("description must be a string");
     }
     const outputConfig = {
       type: "custom",
-      satoshis,
-      description,
-      lockingScript
+      satoshis: params.satoshis,
+      description: params.description,
+      lockingScript: params.lockingScript
     };
     this.outputs.push(outputConfig);
     return new OutputBuilder(this, outputConfig);
@@ -1147,13 +1049,13 @@ var TransactionTemplate = class {
         case "ordinalP2PKH": {
           const p2pkh = new P2PKH(this.wallet);
           const walletParams = config.walletParams;
-          unlockingScriptTemplate = p2pkh.unlock(
-            walletParams?.protocolID,
-            walletParams?.keyID,
-            walletParams?.counterparty,
-            config.signOutputs,
-            config.anyoneCanPay
-          );
+          unlockingScriptTemplate = p2pkh.unlock({
+            protocolID: walletParams?.protocolID,
+            keyID: walletParams?.keyID,
+            counterparty: walletParams?.counterparty,
+            signOutputs: config.signOutputs,
+            anyoneCanPay: config.anyoneCanPay
+          });
           break;
         }
         case "custom": {
@@ -1201,9 +1103,9 @@ var TransactionTemplate = class {
             });
           }
           if (isDerivationParams(addressOrParams)) {
-            lockingScript = await p2pkh.lock(addressOrParams);
+            lockingScript = await p2pkh.lock({ walletParams: addressOrParams });
           } else {
-            lockingScript = await p2pkh.lock(addressOrParams);
+            lockingScript = await p2pkh.lock({ publicKey: addressOrParams });
           }
           break;
         }
@@ -1225,9 +1127,17 @@ var TransactionTemplate = class {
             });
           }
           if (isDerivationParams(addressOrParams)) {
-            lockingScript = await ordinal.lock(addressOrParams, config.inscription, config.metadata);
+            lockingScript = await ordinal.lock({
+              walletParams: addressOrParams,
+              inscription: config.inscription,
+              metadata: config.metadata
+            });
           } else {
-            lockingScript = await ordinal.lock(addressOrParams, config.inscription, config.metadata);
+            lockingScript = await ordinal.lock({
+              publicKey: addressOrParams,
+              inscription: config.inscription,
+              metadata: config.metadata
+            });
           }
           break;
         }
@@ -1253,9 +1163,9 @@ var TransactionTemplate = class {
             });
           }
           if (isDerivationParams(addressOrParams)) {
-            lockingScript = await p2pkh.lock(addressOrParams);
+            lockingScript = await p2pkh.lock({ walletParams: addressOrParams });
           } else {
-            lockingScript = await p2pkh.lock(addressOrParams);
+            lockingScript = await p2pkh.lock({ publicKey: addressOrParams });
           }
           break;
         }
@@ -1398,6 +1308,15 @@ var TransactionTemplate = class {
       txid: result.txid,
       tx: result.tx
     };
+  }
+  /**
+   * Preview the transaction without executing it.
+   * Equivalent to calling build({ preview: true }).
+   *
+   * @returns Promise resolving to the createAction arguments object
+   */
+  async preview() {
+    return this.build({ preview: true });
   }
 };
 // Annotate the CommonJS export names for ESM import in node:
