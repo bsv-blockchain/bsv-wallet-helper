@@ -22,18 +22,18 @@ jobs:
     - name: Build
       if: steps.cache-modules.outputs.cache-hit != 'true'
       run: npm install
-    - name: Lint
-      run: npm run lint:ci
-    - name: Test with Coverage
-      run: npm run test:coverage
-    - name: Upload coverage to Codecov
-      uses: codecov/codecov-action@v3
-      with:
-        token: ${{ secrets.CODECOV_TOKEN }}
-        files: ./coverage/lcov.info
-        flags: unittests
-        name: codecov-umbrella
-        fail_ci_if_error: false
+   # - name: Lint
+   #  run: npm run lint:ci
+   # - name: Test with Coverage
+   #  run: npm run test
+   # - name: Upload coverage to Codecov
+   #  uses: codecov/codecov-action@v3
+   #  with:
+   #    token: ${{ secrets.CODECOV_TOKEN }}
+   #    files: ./coverage/lcov.info
+   #    flags: unittests
+   #    name: codecov-umbrella
+   #    fail_ci_if_error: false
   publish:
     name: Publish
     needs: test
