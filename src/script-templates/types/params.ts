@@ -1,15 +1,15 @@
-import { WalletProtocol, WalletCounterparty, Script } from "@bsv/sdk";
-import { WalletDerivationParams } from "../../types/wallet";
-import { Inscription, MAP } from "../ordinal";
+import { WalletProtocol, WalletCounterparty, Script } from '@bsv/sdk'
+import { WalletDerivationParams } from '../../types/wallet'
+import { Inscription, MAP } from '../ordinal'
 
 /**
  * Parameters for P2PKH lock method with public key hash
  *
  * @property pubkeyhash - 20-byte public key hash array
  */
-export type P2PKHLockWithPubkeyhash = {
-    /** 20-byte public key hash array */
-    pubkeyhash: number[]
+export interface P2PKHLockWithPubkeyhash {
+  /** 20-byte public key hash array */
+  pubkeyhash: number[]
 }
 
 /**
@@ -17,9 +17,9 @@ export type P2PKHLockWithPubkeyhash = {
  *
  * @property publicKey - Public key as hex string
  */
-export type P2PKHLockWithPublicKey = {
-    /** Public key as hex string */
-    publicKey: string
+export interface P2PKHLockWithPublicKey {
+  /** Public key as hex string */
+  publicKey: string
 }
 
 /**
@@ -27,9 +27,9 @@ export type P2PKHLockWithPublicKey = {
  *
  * @property walletParams - Wallet derivation parameters (protocolID, keyID, counterparty)
  */
-export type P2PKHLockWithWallet = {
-    /** Wallet derivation parameters (protocolID, keyID, counterparty) */
-    walletParams: WalletDerivationParams
+export interface P2PKHLockWithWallet {
+  /** Wallet derivation parameters (protocolID, keyID, counterparty) */
+  walletParams: WalletDerivationParams
 }
 
 /**
@@ -52,21 +52,21 @@ export type P2PKHLockParams =
  * @property sourceSatoshis - Optional amount in satoshis being unlocked
  * @property lockingScript - Optional locking script being unlocked
  */
-export type P2PKHUnlockParams = {
-    /** Protocol identifier for key derivation (default: [2, "p2pkh"]) */
-    protocolID?: WalletProtocol,
-    /** Specific key identifier within the protocol (default: '0') */
-    keyID?: string,
-    /** The counterparty for which the key is being used (default: 'self') */
-    counterparty?: WalletCounterparty,
-    /** Signature scope: 'all', 'none', or 'single' (default: 'all') */
-    signOutputs?: 'all' | 'none' | 'single',
-    /** Allow other inputs to be added later (default: false) */
-    anyoneCanPay?: boolean,
-    /** Optional amount in satoshis being unlocked (otherwise requires sourceTransaction) */
-    sourceSatoshis?: number,
-    /** Optional locking script being unlocked (otherwise requires sourceTransaction) */
-    lockingScript?: Script
+export interface P2PKHUnlockParams {
+  /** Protocol identifier for key derivation (default: [2, "p2pkh"]) */
+  protocolID?: WalletProtocol
+  /** Specific key identifier within the protocol (default: '0') */
+  keyID?: string
+  /** The counterparty for which the key is being used (default: 'self') */
+  counterparty?: WalletCounterparty
+  /** Signature scope: 'all', 'none', or 'single' (default: 'all') */
+  signOutputs?: 'all' | 'none' | 'single'
+  /** Allow other inputs to be added later (default: false) */
+  anyoneCanPay?: boolean
+  /** Optional amount in satoshis being unlocked (otherwise requires sourceTransaction) */
+  sourceSatoshis?: number
+  /** Optional locking script being unlocked (otherwise requires sourceTransaction) */
+  lockingScript?: Script
 }
 
 /**
@@ -76,13 +76,13 @@ export type P2PKHUnlockParams = {
  * @property inscription - Optional inscription data (dataB64, contentType)
  * @property metadata - Optional MAP metadata (app, type, and custom properties)
  */
-export type OrdinalLockWithPubkeyhash = {
-    /** 20-byte public key hash array */
-    pubkeyhash: number[],
-    /** Optional inscription data with base64 file data and content type */
-    inscription?: Inscription,
-    /** Optional MAP metadata with app, type, and custom properties */
-    metadata?: MAP
+export interface OrdinalLockWithPubkeyhash {
+  /** 20-byte public key hash array */
+  pubkeyhash: number[]
+  /** Optional inscription data with base64 file data and content type */
+  inscription?: Inscription
+  /** Optional MAP metadata with app, type, and custom properties */
+  metadata?: MAP
 }
 
 /**
@@ -92,13 +92,13 @@ export type OrdinalLockWithPubkeyhash = {
  * @property inscription - Optional inscription data (dataB64, contentType)
  * @property metadata - Optional MAP metadata (app, type, and custom properties)
  */
-export type OrdinalLockWithPublicKey = {
-    /** Public key as hex string */
-    publicKey: string,
-    /** Optional inscription data with base64 file data and content type */
-    inscription?: Inscription,
-    /** Optional MAP metadata with app, type, and custom properties */
-    metadata?: MAP
+export interface OrdinalLockWithPublicKey {
+  /** Public key as hex string */
+  publicKey: string
+  /** Optional inscription data with base64 file data and content type */
+  inscription?: Inscription
+  /** Optional MAP metadata with app, type, and custom properties */
+  metadata?: MAP
 }
 
 /**
@@ -108,13 +108,13 @@ export type OrdinalLockWithPublicKey = {
  * @property inscription - Optional inscription data (dataB64, contentType)
  * @property metadata - Optional MAP metadata (app, type, and custom properties)
  */
-export type OrdinalLockWithWallet = {
-    /** Wallet derivation parameters (protocolID, keyID, counterparty) */
-    walletParams: WalletDerivationParams,
-    /** Optional inscription data with base64 file data and content type */
-    inscription?: Inscription,
-    /** Optional MAP metadata with app, type, and custom properties */
-    metadata?: MAP
+export interface OrdinalLockWithWallet {
+  /** Wallet derivation parameters (protocolID, keyID, counterparty) */
+  walletParams: WalletDerivationParams
+  /** Optional inscription data with base64 file data and content type */
+  inscription?: Inscription
+  /** Optional MAP metadata with app, type, and custom properties */
+  metadata?: MAP
 }
 
 /**

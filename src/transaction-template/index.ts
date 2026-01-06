@@ -1,5 +1,5 @@
-export { TransactionTemplate, OutputBuilder, InputBuilder } from './transaction.js';
-export { type BuildParams } from './types';
+export { TransactionTemplate, OutputBuilder, InputBuilder } from './transaction.js'
+export { type BuildParams } from './types'
 
 // Export all parameter types
 export {

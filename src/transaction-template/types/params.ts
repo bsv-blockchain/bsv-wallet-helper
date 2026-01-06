@@ -1,6 +1,6 @@
-import { Transaction, LockingScript, Script } from "@bsv/sdk";
-import { WalletDerivationParams } from "../../types/wallet";
-import { Inscription, MAP } from "../../script-templates/ordinal";
+import { Transaction, LockingScript, Script } from '@bsv/sdk'
+import { WalletDerivationParams } from '../../types/wallet'
+import { Inscription, MAP } from '../../script-templates/ordinal'
 
 // ============================================================================
 // OUTPUT PARAMETER TYPES
@@ -13,13 +13,13 @@ import { Inscription, MAP } from "../../script-templates/ordinal";
  * @property satoshis - Amount in satoshis for this output
  * @property description - Optional description for tracking purposes
  */
-export type AddP2PKHOutputWithPublicKey = {
-    /** Public key as hex string to lock the output to */
-    publicKey: string,
-    /** Amount in satoshis for this output */
-    satoshis: number,
-    /** Optional description for tracking purposes */
-    description?: string
+export interface AddP2PKHOutputWithPublicKey {
+  /** Public key as hex string to lock the output to */
+  publicKey: string
+  /** Amount in satoshis for this output */
+  satoshis: number
+  /** Optional description for tracking purposes */
+  description?: string
 }
 
 /**
@@ -29,13 +29,13 @@ export type AddP2PKHOutputWithPublicKey = {
  * @property satoshis - Amount in satoshis for this output
  * @property description - Optional description for tracking purposes
  */
-export type AddP2PKHOutputWithWallet = {
-    /** Wallet derivation parameters (protocolID, keyID, counterparty) */
-    walletParams: WalletDerivationParams,
-    /** Amount in satoshis for this output */
-    satoshis: number,
-    /** Optional description for tracking purposes */
-    description?: string
+export interface AddP2PKHOutputWithWallet {
+  /** Wallet derivation parameters (protocolID, keyID, counterparty) */
+  walletParams: WalletDerivationParams
+  /** Amount in satoshis for this output */
+  satoshis: number
+  /** Optional description for tracking purposes */
+  description?: string
 }
 
 /**
@@ -44,11 +44,11 @@ export type AddP2PKHOutputWithWallet = {
  * @property satoshis - Amount in satoshis for this output
  * @property description - Optional description for tracking purposes
  */
-export type AddP2PKHOutputWithAutoDerivation = {
-    /** Amount in satoshis for this output */
-    satoshis: number,
-    /** Optional description for tracking purposes */
-    description?: string
+export interface AddP2PKHOutputWithAutoDerivation {
+  /** Amount in satoshis for this output */
+  satoshis: number
+  /** Optional description for tracking purposes */
+  description?: string
 }
 
 /**
@@ -66,11 +66,11 @@ export type AddP2PKHOutputParams =
  * @property publicKey - Public key as hex string to send change to
  * @property description - Optional description for tracking purposes
  */
-export type AddChangeOutputWithPublicKey = {
-    /** Public key as hex string to send change to */
-    publicKey: string,
-    /** Optional description for tracking purposes */
-    description?: string
+export interface AddChangeOutputWithPublicKey {
+  /** Public key as hex string to send change to */
+  publicKey: string
+  /** Optional description for tracking purposes */
+  description?: string
 }
 
 /**
@@ -79,11 +79,11 @@ export type AddChangeOutputWithPublicKey = {
  * @property walletParams - Wallet derivation parameters (protocolID, keyID, counterparty)
  * @property description - Optional description for tracking purposes
  */
-export type AddChangeOutputWithWallet = {
-    /** Wallet derivation parameters (protocolID, keyID, counterparty) */
-    walletParams: WalletDerivationParams,
-    /** Optional description for tracking purposes */
-    description?: string
+export interface AddChangeOutputWithWallet {
+  /** Wallet derivation parameters (protocolID, keyID, counterparty) */
+  walletParams: WalletDerivationParams
+  /** Optional description for tracking purposes */
+  description?: string
 }
 
 /**
@@ -91,9 +91,9 @@ export type AddChangeOutputWithWallet = {
  *
  * @property description - Optional description for tracking purposes
  */
-export type AddChangeOutputWithAutoDerivation = {
-    /** Optional description for tracking purposes */
-    description?: string
+export interface AddChangeOutputWithAutoDerivation {
+  /** Optional description for tracking purposes */
+  description?: string
 }
 
 /**
@@ -115,17 +115,17 @@ export type AddChangeOutputParams =
  * @property metadata - Optional MAP metadata (app, type, and custom properties)
  * @property description - Optional description for tracking purposes
  */
-export type AddOrdinalP2PKHOutputWithPublicKey = {
-    /** Public key as hex string to lock the output to */
-    publicKey: string,
-    /** Amount in satoshis for this output (typically 1 for ordinals) */
-    satoshis: number,
-    /** Optional inscription data with base64 file data and content type */
-    inscription?: Inscription,
-    /** Optional MAP metadata with app, type, and custom properties */
-    metadata?: MAP,
-    /** Optional description for tracking purposes */
-    description?: string
+export interface AddOrdinalP2PKHOutputWithPublicKey {
+  /** Public key as hex string to lock the output to */
+  publicKey: string
+  /** Amount in satoshis for this output (typically 1 for ordinals) */
+  satoshis: number
+  /** Optional inscription data with base64 file data and content type */
+  inscription?: Inscription
+  /** Optional MAP metadata with app, type, and custom properties */
+  metadata?: MAP
+  /** Optional description for tracking purposes */
+  description?: string
 }
 
 /**
@@ -137,17 +137,17 @@ export type AddOrdinalP2PKHOutputWithPublicKey = {
  * @property metadata - Optional MAP metadata (app, type, and custom properties)
  * @property description - Optional description for tracking purposes
  */
-export type AddOrdinalP2PKHOutputWithWallet = {
-    /** Wallet derivation parameters (protocolID, keyID, counterparty) */
-    walletParams: WalletDerivationParams,
-    /** Amount in satoshis for this output (typically 1 for ordinals) */
-    satoshis: number,
-    /** Optional inscription data with base64 file data and content type */
-    inscription?: Inscription,
-    /** Optional MAP metadata with app, type, and custom properties */
-    metadata?: MAP,
-    /** Optional description for tracking purposes */
-    description?: string
+export interface AddOrdinalP2PKHOutputWithWallet {
+  /** Wallet derivation parameters (protocolID, keyID, counterparty) */
+  walletParams: WalletDerivationParams
+  /** Amount in satoshis for this output (typically 1 for ordinals) */
+  satoshis: number
+  /** Optional inscription data with base64 file data and content type */
+  inscription?: Inscription
+  /** Optional MAP metadata with app, type, and custom properties */
+  metadata?: MAP
+  /** Optional description for tracking purposes */
+  description?: string
 }
 
 /**
@@ -158,15 +158,15 @@ export type AddOrdinalP2PKHOutputWithWallet = {
  * @property metadata - Optional MAP metadata (app, type, and custom properties)
  * @property description - Optional description for tracking purposes
  */
-export type AddOrdinalP2PKHOutputWithAutoDerivation = {
-    /** Amount in satoshis for this output (typically 1 for ordinals) */
-    satoshis: number,
-    /** Optional inscription data with base64 file data and content type */
-    inscription?: Inscription,
-    /** Optional MAP metadata with app, type, and custom properties */
-    metadata?: MAP,
-    /** Optional description for tracking purposes */
-    description?: string
+export interface AddOrdinalP2PKHOutputWithAutoDerivation {
+  /** Amount in satoshis for this output (typically 1 for ordinals) */
+  satoshis: number
+  /** Optional inscription data with base64 file data and content type */
+  inscription?: Inscription
+  /** Optional MAP metadata with app, type, and custom properties */
+  metadata?: MAP
+  /** Optional description for tracking purposes */
+  description?: string
 }
 
 /**
@@ -186,13 +186,13 @@ export type AddOrdinalP2PKHOutputParams =
  * @property satoshis - Amount in satoshis for this output
  * @property description - Optional description for tracking purposes
  */
-export type AddCustomOutputParams = {
-    /** Custom locking script for this output */
-    lockingScript: LockingScript,
-    /** Amount in satoshis for this output */
-    satoshis: number,
-    /** Optional description for tracking purposes */
-    description?: string
+export interface AddCustomOutputParams {
+  /** Custom locking script for this output */
+  lockingScript: LockingScript
+  /** Amount in satoshis for this output */
+  satoshis: number
+  /** Optional description for tracking purposes */
+  description?: string
 }
 
 // ============================================================================
@@ -211,23 +211,23 @@ export type AddCustomOutputParams = {
  * @property sourceSatoshis - Optional amount in satoshis being unlocked (otherwise requires sourceTransaction)
  * @property lockingScript - Optional locking script being unlocked (otherwise requires sourceTransaction)
  */
-export type AddP2PKHInputParams = {
-    /** The transaction containing the output to spend */
-    sourceTransaction: Transaction,
-    /** Index of the output to spend in the source transaction */
-    sourceOutputIndex: number,
-    /** Optional wallet derivation parameters (protocolID, keyID, counterparty). If omitted, uses default P2PKH derivation. */
-    walletParams?: WalletDerivationParams,
-    /** Optional description for tracking purposes */
-    description?: string,
-    /** Signature scope: 'all', 'none', or 'single' (default: 'all') */
-    signOutputs?: 'all' | 'none' | 'single',
-    /** Allow other inputs to be added later (default: false) */
-    anyoneCanPay?: boolean,
-    /** Optional amount in satoshis being unlocked (otherwise requires sourceTransaction) */
-    sourceSatoshis?: number,
-    /** Optional locking script being unlocked (otherwise requires sourceTransaction) */
-    lockingScript?: Script
+export interface AddP2PKHInputParams {
+  /** The transaction containing the output to spend */
+  sourceTransaction: Transaction
+  /** Index of the output to spend in the source transaction */
+  sourceOutputIndex: number
+  /** Optional wallet derivation parameters (protocolID, keyID, counterparty). If omitted, uses default P2PKH derivation. */
+  walletParams?: WalletDerivationParams
+  /** Optional description for tracking purposes */
+  description?: string
+  /** Signature scope: 'all', 'none', or 'single' (default: 'all') */
+  signOutputs?: 'all' | 'none' | 'single'
+  /** Allow other inputs to be added later (default: false) */
+  anyoneCanPay?: boolean
+  /** Optional amount in satoshis being unlocked (otherwise requires sourceTransaction) */
+  sourceSatoshis?: number
+  /** Optional locking script being unlocked (otherwise requires sourceTransaction) */
+  lockingScript?: Script
 }
 
 /**
@@ -242,23 +242,23 @@ export type AddP2PKHInputParams = {
  * @property sourceSatoshis - Optional amount in satoshis being unlocked (otherwise requires sourceTransaction)
  * @property lockingScript - Optional locking script being unlocked (otherwise requires sourceTransaction)
  */
-export type AddOrdinalP2PKHInputParams = {
-    /** The transaction containing the ordinal output to spend */
-    sourceTransaction: Transaction,
-    /** Index of the ordinal output to spend in the source transaction */
-    sourceOutputIndex: number,
-    /** Optional wallet derivation parameters (protocolID, keyID, counterparty). If omitted, uses default P2PKH derivation. */
-    walletParams?: WalletDerivationParams,
-    /** Optional description for tracking purposes */
-    description?: string,
-    /** Signature scope: 'all', 'none', or 'single' (default: 'all') */
-    signOutputs?: 'all' | 'none' | 'single',
-    /** Allow other inputs to be added later (default: false) */
-    anyoneCanPay?: boolean,
-    /** Optional amount in satoshis being unlocked (otherwise requires sourceTransaction) */
-    sourceSatoshis?: number,
-    /** Optional locking script being unlocked (otherwise requires sourceTransaction) */
-    lockingScript?: Script
+export interface AddOrdinalP2PKHInputParams {
+  /** The transaction containing the ordinal output to spend */
+  sourceTransaction: Transaction
+  /** Index of the ordinal output to spend in the source transaction */
+  sourceOutputIndex: number
+  /** Optional wallet derivation parameters (protocolID, keyID, counterparty). If omitted, uses default P2PKH derivation. */
+  walletParams?: WalletDerivationParams
+  /** Optional description for tracking purposes */
+  description?: string
+  /** Signature scope: 'all', 'none', or 'single' (default: 'all') */
+  signOutputs?: 'all' | 'none' | 'single'
+  /** Allow other inputs to be added later (default: false) */
+  anyoneCanPay?: boolean
+  /** Optional amount in satoshis being unlocked (otherwise requires sourceTransaction) */
+  sourceSatoshis?: number
+  /** Optional locking script being unlocked (otherwise requires sourceTransaction) */
+  lockingScript?: Script
 }
 
 /**
@@ -271,17 +271,17 @@ export type AddOrdinalP2PKHInputParams = {
  * @property sourceSatoshis - Optional amount in satoshis being unlocked (otherwise requires sourceTransaction)
  * @property lockingScript - Optional locking script being unlocked (otherwise requires sourceTransaction)
  */
-export type AddCustomInputParams = {
-    /** Custom unlocking script template (must implement ScriptTemplate interface) */
-    unlockingScriptTemplate: any,
-    /** The transaction containing the output to spend */
-    sourceTransaction: Transaction,
-    /** Index of the output to spend in the source transaction */
-    sourceOutputIndex: number,
-    /** Optional description for tracking purposes */
-    description?: string,
-    /** Optional amount in satoshis being unlocked (otherwise requires sourceTransaction) */
-    sourceSatoshis?: number,
-    /** Optional locking script being unlocked (otherwise requires sourceTransaction) */
-    lockingScript?: Script
+export interface AddCustomInputParams {
+  /** Custom unlocking script template (must implement ScriptTemplate interface) */
+  unlockingScriptTemplate: any
+  /** The transaction containing the output to spend */
+  sourceTransaction: Transaction
+  /** Index of the output to spend in the source transaction */
+  sourceOutputIndex: number
+  /** Optional description for tracking purposes */
+  description?: string
+  /** Optional amount in satoshis being unlocked (otherwise requires sourceTransaction) */
+  sourceSatoshis?: number
+  /** Optional locking script being unlocked (otherwise requires sourceTransaction) */
+  lockingScript?: Script
 }
