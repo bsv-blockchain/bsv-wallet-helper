@@ -434,6 +434,280 @@ function getDerivation() {
   };
 }
 
+// src/utils/scriptValidation.ts
+import { Script as Script4, Utils as Utils4 } from "@bsv/sdk";
+var SCRIPT_TEMPLATES = {
+  p2pkh: {
+    // OP_DUP OP_HASH160 [20 bytes] OP_EQUALVERIFY OP_CHECKSIG
+    prefix: "76a914",
+    suffix: "88ac",
+    hashLength: 20
+  },
+  ordinalEnvelope: {
+    // OP_0 OP_IF 'ord' OP_1 'application/bsv-20' OP_0 (BSV-20 standard)
+    start: "0063036f726451126170706c69636174696f6e2f6273762d323000"
+  },
+  opReturn: {
+    // OP_RETURN opcode
+    opcode: "6a"
+  }
+};
+function validateInput(input, functionName) {
+  if (input === null || input === void 0) {
+    throw new Error(`${functionName}: Input cannot be null or undefined`);
+  }
+  const inputType = typeof input;
+  if (Array.isArray(input)) {
+    throw new Error(`${functionName}: Input cannot be an array. Expected LockingScript, Script, or hex string`);
+  }
+  if (inputType !== "string" && inputType !== "object") {
+    throw new Error(`${functionName}: Input must be a LockingScript, Script, or hex string, got ${inputType}`);
+  }
+  if (inputType === "object") {
+    const scriptObj = input;
+    if (typeof scriptObj.toHex !== "function" || typeof scriptObj.toASM !== "function") {
+      throw new Error(`${functionName}: Object must be a LockingScript or Script with toHex() and toASM() methods`);
+    }
+  }
+  if (inputType === "string") {
+    const str = input;
+    if (str.length > 0 && !/^[0-9a-fA-F]*$/.test(str)) {
+      throw new Error(`${functionName}: String must be a valid hexadecimal string`);
+    }
+    if (str.length % 2 !== 0) {
+      throw new Error(`${functionName}: Hex string must have even length`);
+    }
+  }
+}
+function scriptToHex(script) {
+  return script.toHex();
+}
+function isP2PKH(input) {
+  validateInput(input, "isP2PKH");
+  try {
+    const hex = typeof input === "string" ? input : scriptToHex(input);
+    const { prefix, suffix, hashLength } = SCRIPT_TEMPLATES.p2pkh;
+    const expectedLength = 4 + 2 + hashLength * 2 + 4;
+    if (hex.length !== expectedLength) {
+      return false;
+    }
+    if (!hex.startsWith(prefix)) {
+      return false;
+    }
+    const lengthByte = hex.substring(4, 6);
+    if (lengthByte !== "14") {
+      return false;
+    }
+    if (!hex.endsWith(suffix)) {
+      return false;
+    }
+    return true;
+  } catch (error) {
+    return false;
+  }
+}
+function isOrdinal(input) {
+  validateInput(input, "isOrdinal");
+  try {
+    const hex = typeof input === "string" ? input : scriptToHex(input);
+    if (!hasOrd(hex)) {
+      return false;
+    }
+    const p2pkhPattern = /76a914[0-9a-fA-F]{40}88ac/;
+    const hasP2PKH = p2pkhPattern.test(hex);
+    return hasP2PKH;
+  } catch (error) {
+    return false;
+  }
+}
+function hasOrd(input) {
+  validateInput(input, "hasOrd");
+  try {
+    const hex = typeof input === "string" ? input : scriptToHex(input);
+    const { start } = SCRIPT_TEMPLATES.ordinalEnvelope;
+    return hex.includes(start);
+  } catch (error) {
+    return false;
+  }
+}
+function hasOpReturnData(input) {
+  validateInput(input, "hasOpReturnData");
+  try {
+    if (typeof input === "string") {
+      try {
+        const script = Script4.fromHex(input);
+        const asm = script.toASM();
+        if (asm.includes("OP_RETURN")) {
+          return true;
+        }
+      } catch {
+      }
+      if (input.startsWith("6a")) {
+        return true;
+      }
+      const patterns = [
+        /88ac6a/,
+        // OP_CHECKSIG followed by OP_RETURN
+        /686a/,
+        // OP_ENDIF followed by OP_RETURN
+        /ae6a/
+        // OP_CHECKMULTISIG followed by OP_RETURN
+      ];
+      return patterns.some((pattern) => pattern.test(input));
+    } else {
+      return input.toASM().includes("OP_RETURN");
+    }
+  } catch (error) {
+    return false;
+  }
+}
+function getScriptType(input) {
+  validateInput(input, "getScriptType");
+  try {
+    if (typeof input === "string" ? isOrdinal(input) : isOrdinal(input)) {
+      return "Ordinal";
+    }
+    if (typeof input === "string" ? isP2PKH(input) : isP2PKH(input)) {
+      return "P2PKH";
+    }
+    if (typeof input === "string" ? hasOpReturnData(input) : hasOpReturnData(input)) {
+      const hex = typeof input === "string" ? input : scriptToHex(input);
+      if (hex.startsWith("6a")) {
+        return "OpReturn";
+      }
+    }
+    return "Custom";
+  } catch (error) {
+    return "Custom";
+  }
+}
+function extractInscriptionData(input) {
+  validateInput(input, "extractInscriptionData");
+  const script = typeof input === "string" ? Script4.fromHex(input) : input;
+  const chunks = script.chunks;
+  if (typeof input === "string" ? !hasOrd(input) : !hasOrd(input)) {
+    return null;
+  }
+  const endifIndex = chunks.findIndex((chunk) => chunk.op === 104);
+  if (endifIndex === -1) {
+    throw new Error("extractInscriptionData: Malformed ordinal script - missing OP_ENDIF");
+  }
+  let contentType;
+  let dataB64;
+  if (endifIndex === 9) {
+    const contentTypeChunk = chunks[6];
+    if (!contentTypeChunk || !contentTypeChunk.data || contentTypeChunk.data.length === 0) {
+      throw new Error("extractInscriptionData: Missing content type data at chunk 6");
+    }
+    try {
+      contentType = Utils4.toUTF8(contentTypeChunk.data);
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      throw new Error(`extractInscriptionData: Invalid UTF-8 in content type: ${message}`);
+    }
+    const dataChunk = chunks[8];
+    if (!dataChunk || !dataChunk.data || dataChunk.data.length === 0) {
+      throw new Error("extractInscriptionData: Missing inscription data at chunk 8");
+    }
+    dataB64 = Buffer.from(dataChunk.data).toString("base64");
+  } else if (endifIndex === 7) {
+    const dataChunk = chunks[6];
+    if (!dataChunk || !dataChunk.data || dataChunk.data.length === 0) {
+      throw new Error("extractInscriptionData: Missing inscription data at chunk 6");
+    }
+    contentType = "application/octet-stream";
+    dataB64 = Buffer.from(dataChunk.data).toString("base64");
+  } else {
+    throw new Error(`extractInscriptionData: Unexpected OP_ENDIF position at index ${endifIndex}. Expected 7 (without content type) or 9 (with content type)`);
+  }
+  return {
+    dataB64,
+    contentType
+  };
+}
+function extractMapMetadata(input) {
+  validateInput(input, "extractMapMetadata");
+  if (typeof input === "string" ? !hasOpReturnData(input) : !hasOpReturnData(input)) {
+    return null;
+  }
+  const script = typeof input === "string" ? Script4.fromHex(input) : input;
+  const chunks = script.chunks;
+  const opReturnIndex = chunks.findIndex((chunk) => chunk.op === 106);
+  if (opReturnIndex === -1) {
+    return null;
+  }
+  const prefixChunk = chunks[opReturnIndex + 1];
+  if (!prefixChunk || !prefixChunk.data || prefixChunk.data.length === 0) {
+    return null;
+  }
+  let prefix;
+  try {
+    prefix = Utils4.toUTF8(prefixChunk.data);
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    throw new Error(`extractMapMetadata: Invalid UTF-8 in MAP prefix: ${message}`);
+  }
+  if (prefix !== ORDINAL_MAP_PREFIX) {
+    return null;
+  }
+  const cmdChunk = chunks[opReturnIndex + 2];
+  if (!cmdChunk || !cmdChunk.data || cmdChunk.data.length === 0) {
+    return null;
+  }
+  let cmd;
+  try {
+    cmd = Utils4.toUTF8(cmdChunk.data);
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    throw new Error(`extractMapMetadata: Invalid UTF-8 in command: ${message}`);
+  }
+  if (cmd !== "SET") {
+    return null;
+  }
+  const metadata = {};
+  let currentIndex = opReturnIndex + 3;
+  while (currentIndex < chunks.length - 1) {
+    const keyChunk = chunks[currentIndex];
+    const valueChunk = chunks[currentIndex + 1];
+    if (!keyChunk?.data || !valueChunk?.data) {
+      break;
+    }
+    try {
+      const key = Utils4.toUTF8(keyChunk.data);
+      const value = Utils4.toUTF8(valueChunk.data);
+      metadata[key] = value;
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      throw new Error(`extractMapMetadata: Invalid UTF-8 in metadata key-value pair: ${message}`);
+    }
+    currentIndex += 2;
+  }
+  if (!metadata.app || !metadata.type) {
+    return null;
+  }
+  return metadata;
+}
+function extractOpReturnData(input) {
+  validateInput(input, "extractOpReturnData");
+  if (typeof input === "string" ? !hasOpReturnData(input) : !hasOpReturnData(input)) {
+    return null;
+  }
+  const script = typeof input === "string" ? Script4.fromHex(input) : input;
+  const chunks = script.chunks;
+  const opReturnIndex = chunks.findIndex((chunk) => chunk.op === 106);
+  if (opReturnIndex === -1) {
+    return null;
+  }
+  const dataFields = [];
+  for (let i = opReturnIndex + 1; i < chunks.length; i++) {
+    const chunk = chunks[i];
+    if (chunk.data && chunk.data.length > 0) {
+      dataFields.push(Utils4.toBase64(chunk.data));
+    }
+  }
+  return dataFields.length > 0 ? dataFields : null;
+}
+
 // src/transaction-template/types/type-guards.ts
 function isDerivationParams(value) {
   return typeof value === "object" && value !== null && !Array.isArray(value);
@@ -1313,6 +1587,14 @@ export {
   P2PKH as WalletP2PKH,
   addOpReturnData,
   calculatePreimage,
+  extractInscriptionData,
+  extractMapMetadata,
+  extractOpReturnData,
   getDerivation,
+  getScriptType,
+  hasOpReturnData,
+  hasOrd,
+  isOrdinal,
+  isP2PKH,
   makeWallet
 };

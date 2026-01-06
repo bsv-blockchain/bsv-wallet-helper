@@ -47,4 +47,22 @@ export {
 export { type WalletDerivationParams } from './types/index.js'
 
 // Utilities
-export { makeWallet, calculatePreimage, addOpReturnData, getDerivation } from './utils/index.js'
+export {
+  makeWallet,
+  calculatePreimage,
+  addOpReturnData,
+  getDerivation,
+  // Script validation
+  isP2PKH,
+  isOrdinal,
+  hasOrd,
+  hasOpReturnData,
+  // Script analysis
+  getScriptType,
+  extractOpReturnData,
+  extractMapMetadata,
+  extractInscriptionData,
+  // Types
+  type ScriptType,
+  type InscriptionData
+} from './utils/index.js'

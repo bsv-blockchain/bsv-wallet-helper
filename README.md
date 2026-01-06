@@ -179,98 +179,18 @@ type MAP = {
 
 ### Utilities
 
-#### `makeWallet(chain, storageURL, privateKey)`
-Creates a BRC-100 compatible wallet for testing or backend use.
+Helper functions for wallet creation, transaction signing, script manipulation, validation, and data extraction.
 
-```typescript
-import { makeWallet } from 'bsv-wallet-helper';
+📖 **[Complete Utilities Documentation](./docs/utilities.md)**
 
-const wallet = await makeWallet(
-  'test',                    // Chain: 'test' or 'main'
-  'https://storage-url.com', // Storage provider URL
-  privateKeyHex              // Private key as hex string
-);
-```
-
-**Parameters:**
-- `chain`: `'test' | 'main'` - Blockchain network
-- `storageURL`: `string` - Storage provider URL
-- `privateKey`: `string` - Private key as hex string
-
-**Throws:** `Error` if parameters are invalid or wallet creation fails
-
-#### `calculatePreimage(tx, inputIndex, signOutputs, anyoneCanPay, sourceSatoshis?, lockingScript?)`
-Calculates the transaction preimage for signing.
-
-```typescript
-import { calculatePreimage } from 'bsv-wallet-helper';
-
-const { preimage, signatureScope } = calculatePreimage(
-  transaction,
-  0,          // Input index
-  'all',      // Sign outputs: 'all' | 'none' | 'single'
-  false,      // anyoneCanPay flag
-  1000,       // Optional: source satoshis
-  script      // Optional: locking script
-);
-```
-
-**Parameters:**
-- `tx`: `Transaction` - Transaction to sign
-- `inputIndex`: `number` - Index of input being signed
-- `signOutputs`: `'all' | 'none' | 'single'` - Signature scope
-- `anyoneCanPay`: `boolean` - SIGHASH_ANYONECANPAY flag
-- `sourceSatoshis?`: `number` - Optional satoshi amount (or use input.sourceTransaction)
-- `lockingScript?`: `Script` - Optional locking script (or use input.sourceTransaction)
-
-**Returns:** `{ preimage: number[], signatureScope: number }`
-
-**Throws:** `Error` if parameters are invalid or required data is missing
-
-#### `addOpReturnData(script, fields)`
-Appends OP_RETURN data fields to any locking script for adding metadata.
-
-```typescript
-import { addOpReturnData } from 'bsv-wallet-helper';
-
-// Add plain text metadata
-const scriptWithMetadata = addOpReturnData(lockingScript, [
-  'MY_APP',
-  'action',
-  'transfer'
-]);
-
-// Add JSON data
-const metadata = { user: 'Alice', amount: 100 };
-const scriptWithJson = addOpReturnData(lockingScript, [
-  'MY_APP',
-  JSON.stringify(metadata)
-]);
-
-// Add hex hash
-const documentHash = 'a'.repeat(64); // 32-byte SHA256 hash
-const scriptWithHash = addOpReturnData(lockingScript, [documentHash]);
-
-// Mix types: text, hex, and byte arrays
-const scriptMixed = addOpReturnData(lockingScript, [
-  'APP_ID',           // Plain text (auto-converted to hex)
-  'deadbeef',         // Hex string (detected and preserved)
-  [0x01, 0x02, 0x03]  // Byte array (converted to hex)
-]);
-```
-
-**Parameters:**
-- `script`: `LockingScript` - The base locking script to append OP_RETURN data to
-- `fields`: `(string | number[])[]` - Array of data fields. Each field can be:
-  - Plain text string (auto-converted to hex)
-  - Hex string (detected by even length and valid hex chars, normalized to lowercase)
-  - Byte array (converted to hex)
-
-**Returns:** `LockingScript` - New locking script with OP_RETURN data appended
-
-**Throws:** `Error` if no fields are provided
-
-**Note:** This works with any script type (P2PKH, ordinals, etc.) and provides a generic way to add metadata without protocol-specific overhead.
+Includes:
+- **Wallet Creation**: `makeWallet()` for creating BRC-100 wallets
+- **Transaction Signing**: `calculatePreimage()` for signature generation
+- **Script Utilities**: `addOpReturnData()` for adding metadata
+- **Script Validation**: `isP2PKH()`, `isOrdinal()`, `hasOrd()`, `hasOpReturnData()`
+- **Script Type Detection**: `getScriptType()` to identify script types
+- **Data Extraction**: `extractOpReturnData()`, `extractMapMetadata()`, `extractInscriptionData()`
+- **Key Derivation**: `getDerivation()` for BRC-29 key derivation
 
 ## ⚠️ Important: Lock and Unlock Key Consistency
 
