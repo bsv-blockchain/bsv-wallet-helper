@@ -11,7 +11,7 @@ import {
   Script,
   MerklePath,
 } from '@bsv/sdk';
-import { TransactionTemplate } from '../transaction';
+import { TransactionBuilder } from '../transaction';
 import { makeWallet } from '../../utils/mockWallet';
 import P2PKH from '../../script-templates/p2pkh';
 import OrdP2PKH from '../../script-templates/ordinal';
@@ -25,7 +25,7 @@ describe('TransactionTemplate', () => {
       const privateKey = new PrivateKey(1);
       const wallet = await makeWallet('test', storageURL, privateKey.toHex());
 
-      const template = new TransactionTemplate(wallet);
+      const template = new TransactionBuilder(wallet);
       expect(template).toBeDefined();
 
       // Verify internal state is initialized correctly
@@ -40,7 +40,7 @@ describe('TransactionTemplate', () => {
       const privateKey = new PrivateKey(2);
       const wallet = await makeWallet('test', storageURL, privateKey.toHex());
 
-      const template = new TransactionTemplate(wallet, "My transaction");
+      const template = new TransactionBuilder(wallet, "My transaction");
       expect(template).toBeDefined();
 
       // Verify internal state is initialized with custom description
@@ -52,7 +52,7 @@ describe('TransactionTemplate', () => {
 
     test('should throw error when wallet is not provided', () => {
       // @ts-ignore - intentionally testing invalid input
-      expect(() => new TransactionTemplate(null)).toThrow('Wallet is required for TransactionTemplate');
+      expect(() => new TransactionBuilder(null)).toThrow('Wallet is required for TransactionBuilder');
     });
   });
 
@@ -62,7 +62,7 @@ describe('TransactionTemplate', () => {
       const wallet = await makeWallet('test', storageURL, privateKey.toHex());
       const publicKey = privateKey.toPublicKey().toString();
 
-      const template = new TransactionTemplate(wallet)
+      const template = new TransactionBuilder(wallet)
         .addP2PKHOutput({ publicKey, satoshis: 1000, description: "Test output" });
 
       expect(template).toBeDefined();
@@ -86,7 +86,7 @@ describe('TransactionTemplate', () => {
         counterparty: 'self' as WalletCounterparty,
       };
 
-      const template = new TransactionTemplate(wallet)
+      const template = new TransactionBuilder(wallet)
         .addP2PKHOutput({ walletParams, satoshis: 1000, description: "Test output" });
 
       expect(template).toBeDefined();
@@ -106,7 +106,7 @@ describe('TransactionTemplate', () => {
 
       // Should not throw - will use BRC-29 derivation
       expect(() => {
-        new TransactionTemplate(wallet).addP2PKHOutput({ satoshis: 1000 });
+        new TransactionBuilder(wallet).addP2PKHOutput({ satoshis: 1000 });
       }).not.toThrow();
     });
 
@@ -116,7 +116,7 @@ describe('TransactionTemplate', () => {
       const publicKey = privateKey.toPublicKey().toString();
 
       expect(() => {
-        new TransactionTemplate(wallet).addP2PKHOutput({ publicKey, satoshis: -100 });
+        new TransactionBuilder(wallet).addP2PKHOutput({ publicKey, satoshis: -100 });
       }).toThrow('satoshis must be a non-negative number');
     });
 
@@ -127,7 +127,7 @@ describe('TransactionTemplate', () => {
 
       expect(() => {
         // @ts-ignore - intentionally testing invalid input
-        new TransactionTemplate(wallet).addP2PKHOutput({ publicKey, satoshis: 1000, description: 123 });
+        new TransactionBuilder(wallet).addP2PKHOutput({ publicKey, satoshis: 1000, description: 123 });
       }).toThrow('description must be a string');
     });
   });
@@ -138,7 +138,7 @@ describe('TransactionTemplate', () => {
       const wallet = await makeWallet('test', storageURL, privateKey.toHex());
       const lockingScript = LockingScript.fromASM('OP_TRUE');
 
-      const template = new TransactionTemplate(wallet)
+      const template = new TransactionBuilder(wallet)
         .addCustomOutput({ lockingScript, satoshis: 1000, description: "Custom output" });
 
       expect(template).toBeDefined();
@@ -158,7 +158,7 @@ describe('TransactionTemplate', () => {
 
       expect(() => {
         // @ts-ignore - intentionally testing invalid input
-        new TransactionTemplate(wallet).addCustomOutput({ lockingScript: null, satoshis: 1000 });
+        new TransactionBuilder(wallet).addCustomOutput({ lockingScript: null, satoshis: 1000 });
       }).toThrow('lockingScript must be a LockingScript instance');
     });
   });
@@ -169,7 +169,7 @@ describe('TransactionTemplate', () => {
       const wallet = await makeWallet('test', storageURL, privateKey.toHex());
       const publicKey = privateKey.toPublicKey().toString();
 
-      const template = new TransactionTemplate(wallet)
+      const template = new TransactionBuilder(wallet)
         .addP2PKHOutput({ publicKey, satoshis: 1, description: "Test output" })
           .addOpReturn(['hello world']);
 
@@ -187,7 +187,7 @@ describe('TransactionTemplate', () => {
       const publicKey = privateKey.toPublicKey().toString();
 
       expect(() => {
-        new TransactionTemplate(wallet)
+        new TransactionBuilder(wallet)
           .addP2PKHOutput({ publicKey, satoshis: 1, description: "Test output" })
             .addOpReturn([]);
       }).toThrow('addOpReturn requires a non-empty array of fields');
@@ -199,7 +199,7 @@ describe('TransactionTemplate', () => {
       const publicKey = privateKey.toPublicKey().toString();
 
       expect(() => {
-        new TransactionTemplate(wallet)
+        new TransactionBuilder(wallet)
           .addP2PKHOutput({ publicKey, satoshis: 1, description: "Test output" })
             // @ts-ignore - intentionally testing invalid input
             .addOpReturn('hello');
@@ -213,7 +213,7 @@ describe('TransactionTemplate', () => {
       const wallet = await makeWallet('test', storageURL, privateKey.toHex());
       const publicKey = privateKey.toPublicKey().toString();
 
-      const template = new TransactionTemplate(wallet, "Multi-output transaction")
+      const template = new TransactionBuilder(wallet, "Multi-output transaction")
         .addP2PKHOutput({ publicKey, satoshis: 1000, description: "First output" })
         .addP2PKHOutput({ publicKey, satoshis: 2000, description: "Second output" })
         .addP2PKHOutput({ publicKey, satoshis: 3000, description: "Third output" });
@@ -236,7 +236,7 @@ describe('TransactionTemplate', () => {
       const wallet = await makeWallet('test', storageURL, privateKey.toHex());
       const publicKey = privateKey.toPublicKey().toString();
 
-      const template = new TransactionTemplate(wallet)
+      const template = new TransactionBuilder(wallet)
         .addP2PKHOutput({ publicKey, satoshis: 1000, description: "First output" })
           .addOpReturn(['metadata1'])
         .addP2PKHOutput({ publicKey, satoshis: 2000, description: "Second output" })
@@ -259,7 +259,7 @@ describe('TransactionTemplate', () => {
       const publicKey = privateKey.toPublicKey().toString();
       const lockingScript = LockingScript.fromASM('OP_TRUE');
 
-      const template = new TransactionTemplate(wallet)
+      const template = new TransactionBuilder(wallet)
         .addP2PKHOutput({ publicKey, satoshis: 1000, description: "P2PKH output" })
         .addCustomOutput({ lockingScript, satoshis: 500, description: "Custom output" })
         .addP2PKHOutput({ publicKey, satoshis: 2000, description: "Another P2PKH" });
@@ -287,7 +287,7 @@ describe('TransactionTemplate', () => {
       const privateKey = new PrivateKey(16);
       const wallet = await makeWallet('test', storageURL, privateKey.toHex());
 
-      const template = new TransactionTemplate(wallet)
+      const template = new TransactionBuilder(wallet)
         .transactionDescription("My custom description");
 
       expect(template).toBeDefined();
@@ -302,7 +302,7 @@ describe('TransactionTemplate', () => {
 
       expect(() => {
         // @ts-ignore - intentionally testing invalid input
-        new TransactionTemplate(wallet).transactionDescription(123);
+        new TransactionBuilder(wallet).transactionDescription(123);
       }).toThrow('Description must be a string');
     });
 
@@ -310,7 +310,7 @@ describe('TransactionTemplate', () => {
       const privateKey = new PrivateKey(18);
       const wallet = await makeWallet('test', storageURL, privateKey.toHex());
 
-      const template = new TransactionTemplate(wallet)
+      const template = new TransactionBuilder(wallet)
         .options({ randomizeOutputs: false });
 
       expect(template).toBeDefined();
@@ -325,7 +325,7 @@ describe('TransactionTemplate', () => {
 
       expect(() => {
         // @ts-ignore - intentionally testing invalid input
-        new TransactionTemplate(wallet).options('false');
+        new TransactionBuilder(wallet).options('false');
       }).toThrow('Options must be an object');
     });
 
@@ -334,7 +334,7 @@ describe('TransactionTemplate', () => {
       const wallet = await makeWallet('test', storageURL, privateKey.toHex());
 
       // Should accept various CreateActionOptions without throwing
-      const template = new TransactionTemplate(wallet)
+      const template = new TransactionBuilder(wallet)
         .options({ randomizeOutputs: true })
         .options({ trustSelf: 'known' })
         .options({ signAndProcess: true })
@@ -354,27 +354,27 @@ describe('TransactionTemplate', () => {
 
       expect(() => {
         // @ts-ignore - intentionally testing invalid input
-        new TransactionTemplate(wallet).options({ signAndProcess: 'true' });
+        new TransactionBuilder(wallet).options({ signAndProcess: 'true' });
       }).toThrow('signAndProcess must be a boolean');
 
       expect(() => {
         // @ts-ignore - intentionally testing invalid input
-        new TransactionTemplate(wallet).options({ acceptDelayedBroadcast: 1 });
+        new TransactionBuilder(wallet).options({ acceptDelayedBroadcast: 1 });
       }).toThrow('acceptDelayedBroadcast must be a boolean');
 
       expect(() => {
         // @ts-ignore - intentionally testing invalid input
-        new TransactionTemplate(wallet).options({ returnTXIDOnly: 'yes' });
+        new TransactionBuilder(wallet).options({ returnTXIDOnly: 'yes' });
       }).toThrow('returnTXIDOnly must be a boolean');
 
       expect(() => {
         // @ts-ignore - intentionally testing invalid input
-        new TransactionTemplate(wallet).options({ noSend: null });
+        new TransactionBuilder(wallet).options({ noSend: null });
       }).toThrow('noSend must be a boolean');
 
       expect(() => {
         // @ts-ignore - intentionally testing invalid input
-        new TransactionTemplate(wallet).options({ randomizeOutputs: 'false' });
+        new TransactionBuilder(wallet).options({ randomizeOutputs: 'false' });
       }).toThrow('randomizeOutputs must be a boolean');
     });
 
@@ -384,12 +384,12 @@ describe('TransactionTemplate', () => {
 
       expect(() => {
         // @ts-ignore - intentionally testing invalid input
-        new TransactionTemplate(wallet).options({ trustSelf: 'invalid' });
+        new TransactionBuilder(wallet).options({ trustSelf: 'invalid' });
       }).toThrow('trustSelf must be either "known" or "all"');
 
       expect(() => {
         // @ts-ignore - intentionally testing invalid input
-        new TransactionTemplate(wallet).options({ trustSelf: true });
+        new TransactionBuilder(wallet).options({ trustSelf: true });
       }).toThrow('trustSelf must be either "known" or "all"');
     });
 
@@ -399,32 +399,32 @@ describe('TransactionTemplate', () => {
 
       expect(() => {
         // @ts-ignore - intentionally testing invalid input
-        new TransactionTemplate(wallet).options({ knownTxids: 'not-an-array' });
+        new TransactionBuilder(wallet).options({ knownTxids: 'not-an-array' });
       }).toThrow('knownTxids must be an array');
 
       expect(() => {
         // @ts-ignore - intentionally testing invalid input
-        new TransactionTemplate(wallet).options({ knownTxids: [123, 456] });
+        new TransactionBuilder(wallet).options({ knownTxids: [123, 456] });
       }).toThrow('knownTxids[0] must be a string (hex txid)');
 
       expect(() => {
         // @ts-ignore - intentionally testing invalid input
-        new TransactionTemplate(wallet).options({ noSendChange: 'not-an-array' });
+        new TransactionBuilder(wallet).options({ noSendChange: 'not-an-array' });
       }).toThrow('noSendChange must be an array');
 
       expect(() => {
         // @ts-ignore - intentionally testing invalid input
-        new TransactionTemplate(wallet).options({ noSendChange: [123] });
+        new TransactionBuilder(wallet).options({ noSendChange: [123] });
       }).toThrow('noSendChange[0] must be a string (outpoint format)');
 
       expect(() => {
         // @ts-ignore - intentionally testing invalid input
-        new TransactionTemplate(wallet).options({ sendWith: {} });
+        new TransactionBuilder(wallet).options({ sendWith: {} });
       }).toThrow('sendWith must be an array');
 
       expect(() => {
         // @ts-ignore - intentionally testing invalid input
-        new TransactionTemplate(wallet).options({ sendWith: [null] });
+        new TransactionBuilder(wallet).options({ sendWith: [null] });
       }).toThrow('sendWith[0] must be a string (hex txid)');
     });
   });
@@ -434,7 +434,7 @@ describe('TransactionTemplate', () => {
       const privateKey = new PrivateKey(24);
       const wallet = await makeWallet('test', storageURL, privateKey.toHex());
 
-      const template = new TransactionTemplate(wallet, "Empty transaction");
+      const template = new TransactionBuilder(wallet, "Empty transaction");
 
       await expect(template.build()).rejects.toThrow(
         'At least one output is required to build a transaction'
@@ -454,7 +454,7 @@ describe('TransactionTemplate', () => {
       });
       wallet.createAction = mockCreateAction;
 
-      const result = await new TransactionTemplate(wallet, "Test transaction")
+      const result = await new TransactionBuilder(wallet, "Test transaction")
         .addP2PKHOutput({ publicKey, satoshis: 1000, description: "Test output" })
         .build();
 
@@ -487,7 +487,7 @@ describe('TransactionTemplate', () => {
         tx: mockTx,
       });
 
-      const outputBuilder = new TransactionTemplate(wallet)
+      const outputBuilder = new TransactionBuilder(wallet)
         .addP2PKHOutput({ publicKey, satoshis: 500 });
 
       // Verify internal configuration before build (access via .parent)
@@ -515,7 +515,7 @@ describe('TransactionTemplate', () => {
       });
       wallet.createAction = mockCreateAction;
 
-      await new TransactionTemplate(wallet)
+      await new TransactionBuilder(wallet)
         .addP2PKHOutput({ publicKey, satoshis: 1000 })
         .options({ randomizeOutputs: false })
         .build();
@@ -541,7 +541,7 @@ describe('TransactionTemplate', () => {
 
       const metadata = { key: "value" };
 
-      await new TransactionTemplate(wallet, "Complex transaction")
+      await new TransactionBuilder(wallet, "Complex transaction")
         .addP2PKHOutput({ publicKey, satoshis: 1000, description: "First output" })
           .addOpReturn([JSON.stringify(metadata)])
         .addP2PKHOutput({ publicKey, satoshis: 2000, description: "Second output" })
@@ -578,7 +578,7 @@ describe('TransactionTemplate', () => {
       });
       wallet.createAction = mockCreateAction;
 
-      await new TransactionTemplate(wallet)
+      await new TransactionBuilder(wallet)
         .addP2PKHOutput({ publicKey, satoshis: 1000, description: "Without OP_RETURN" })
         .addP2PKHOutput({ publicKey, satoshis: 1, description: "With OP_RETURN" })
           .addOpReturn(['metadata'])
@@ -606,7 +606,7 @@ describe('TransactionTemplate', () => {
       });
       wallet.createAction = mockCreateAction;
 
-      await new TransactionTemplate(wallet)
+      await new TransactionBuilder(wallet)
         .addP2PKHOutput({ publicKey, satoshis: 1000 })
         .build();
 
@@ -634,7 +634,7 @@ describe('TransactionTemplate', () => {
       wallet.createAction = mockCreateAction;
 
       // This should match the simplified API from the user's example
-      const template = new TransactionTemplate(wallet, "P2PKH with metadata")
+      const template = new TransactionBuilder(wallet, "P2PKH with metadata")
         .addP2PKHOutput({ publicKey, satoshis: 1, description: "Testing P2PKH" })
           .addOpReturn([JSON.stringify(metadata)]);
 
@@ -671,7 +671,7 @@ describe('TransactionTemplate', () => {
         counterparty: 'self' as WalletCounterparty,
       };
 
-      const outputBuilder = new TransactionTemplate(wallet, "Wallet derivation test")
+      const outputBuilder = new TransactionBuilder(wallet, "Wallet derivation test")
         .addP2PKHOutput({ walletParams: params, satoshis: 5000, description: "Derived output" });
 
       // Verify internal configuration before build (access via .parent)
@@ -696,7 +696,7 @@ describe('TransactionTemplate', () => {
       const wallet = await makeWallet('test', storageURL, privateKey.toHex());
       const publicKey = privateKey.toPublicKey().toString();
 
-      const template = new TransactionTemplate(wallet, "Preview test")
+      const template = new TransactionBuilder(wallet, "Preview test")
         .addP2PKHOutput({ publicKey, satoshis: 1000, description: "Test output" });
 
       const preview = await template.build({ preview: true }) as any;
@@ -721,7 +721,7 @@ describe('TransactionTemplate', () => {
       const wallet = await makeWallet('test', storageURL, privateKey.toHex());
       const publicKey = privateKey.toPublicKey().toString();
 
-      const preview = await new TransactionTemplate(wallet, "Preview with options")
+      const preview = await new TransactionBuilder(wallet, "Preview with options")
         .addP2PKHOutput({ publicKey, satoshis: 500, description: "Output" })
         .options({ randomizeOutputs: false, trustSelf: 'known' })
         .build({ preview: true }) as any;
@@ -738,7 +738,7 @@ describe('TransactionTemplate', () => {
 
       const metadata = { action: "test", timestamp: Date.now() };
 
-      const preview = await new TransactionTemplate(wallet)
+      const preview = await new TransactionBuilder(wallet)
         .addP2PKHOutput({ publicKey, satoshis: 1, description: "With metadata" })
           .addOpReturn([JSON.stringify(metadata)])
         .build({ preview: true }) as any;
@@ -752,7 +752,7 @@ describe('TransactionTemplate', () => {
       const wallet = await makeWallet('test', storageURL, privateKey.toHex());
       const publicKey = privateKey.toPublicKey().toString();
 
-      const preview = await new TransactionTemplate(wallet)
+      const preview = await new TransactionBuilder(wallet)
         .addP2PKHOutput({ publicKey, satoshis: 1000, description: "First" })
         .addP2PKHOutput({ publicKey, satoshis: 2000, description: "Second" })
         .addP2PKHOutput({ publicKey, satoshis: 3000, description: "Third" })
@@ -781,7 +781,7 @@ describe('TransactionTemplate', () => {
         tx: mockTx,
       });
 
-      const result = await new TransactionTemplate(wallet)
+      const result = await new TransactionBuilder(wallet)
         .addP2PKHOutput({ publicKey, satoshis: 1000 })
         .build({ preview: false });
 
@@ -805,7 +805,7 @@ describe('TransactionTemplate', () => {
         tx: mockTx,
       });
 
-      const result = await new TransactionTemplate(wallet)
+      const result = await new TransactionBuilder(wallet)
         .addP2PKHOutput({ publicKey, satoshis: 1000 })
         .build(); // No parameter = default false
 
@@ -825,7 +825,7 @@ describe('TransactionTemplate', () => {
       const wallet = await makeWallet('test', storageURL, privateKey.toHex());
       const publicKey = privateKey.toPublicKey().toString();
 
-      const template = new TransactionTemplate(wallet)
+      const template = new TransactionBuilder(wallet)
         .addChangeOutput({ publicKey, description: "Change output" });
 
       expect(template).toBeDefined();
@@ -849,7 +849,7 @@ describe('TransactionTemplate', () => {
         counterparty: 'self' as WalletCounterparty,
       };
 
-      const template = new TransactionTemplate(wallet)
+      const template = new TransactionBuilder(wallet)
         .addChangeOutput({ walletParams: params, description: "Change output" });
 
       expect(template).toBeDefined();
@@ -868,7 +868,7 @@ describe('TransactionTemplate', () => {
       const wallet = await makeWallet('test', storageURL, privateKey.toHex());
       const publicKey = privateKey.toPublicKey().toString();
 
-      const template = new TransactionTemplate(wallet)
+      const template = new TransactionBuilder(wallet)
         .addChangeOutput({ publicKey });
 
       expect(template).toBeDefined();
@@ -886,7 +886,7 @@ describe('TransactionTemplate', () => {
 
       // Should not throw - will use BRC-29 derivation
       expect(() => {
-        new TransactionTemplate(wallet).addChangeOutput({});
+        new TransactionBuilder(wallet).addChangeOutput({});
       }).not.toThrow();
     });
 
@@ -897,7 +897,7 @@ describe('TransactionTemplate', () => {
 
       expect(() => {
         // @ts-ignore - intentionally testing invalid input
-        new TransactionTemplate(wallet).addChangeOutput({ publicKey, description: 123 });
+        new TransactionBuilder(wallet).addChangeOutput({ publicKey, description: 123 });
       }).toThrow('description must be a string');
     });
 
@@ -906,7 +906,7 @@ describe('TransactionTemplate', () => {
       const wallet = await makeWallet('test', storageURL, privateKey.toHex());
       const publicKey = privateKey.toPublicKey().toString();
 
-      const template = new TransactionTemplate(wallet)
+      const template = new TransactionBuilder(wallet)
         .addChangeOutput({ publicKey, description: "Change with metadata" })
           .addOpReturn(['change', 'metadata']);
 
@@ -924,7 +924,7 @@ describe('TransactionTemplate', () => {
       const wallet = await makeWallet('test', storageURL, privateKey.toHex());
       const publicKey = privateKey.toPublicKey().toString();
 
-      const template = new TransactionTemplate(wallet, "Change without inputs")
+      const template = new TransactionBuilder(wallet, "Change without inputs")
         .addChangeOutput({ publicKey });
 
       await expect(template.build()).rejects.toThrow(
@@ -937,7 +937,7 @@ describe('TransactionTemplate', () => {
       const wallet = await makeWallet('test', storageURL, privateKey.toHex());
       const publicKey = privateKey.toPublicKey().toString();
 
-      const template = new TransactionTemplate(wallet)
+      const template = new TransactionBuilder(wallet)
         .addChangeOutput({ publicKey, description: "First change" })
         .addChangeOutput({ publicKey, description: "Second change" });
 
@@ -957,7 +957,7 @@ describe('TransactionTemplate', () => {
       const wallet = await makeWallet('test', storageURL, privateKey.toHex());
       const publicKey = privateKey.toPublicKey().toString();
 
-      const template = new TransactionTemplate(wallet)
+      const template = new TransactionBuilder(wallet)
         .addP2PKHOutput({ publicKey, satoshis: 1000, description: "Regular output" })
         .addChangeOutput({ publicKey, description: "Change output" })
         .addP2PKHOutput({ publicKey, satoshis: 2000, description: "Another regular" });
@@ -1011,7 +1011,7 @@ describe('TransactionTemplate', () => {
       );
 
       // Create spending transaction using TransactionTemplate
-      const result = await new TransactionTemplate(wallet, "Spending P2PKH")
+      const result = await new TransactionBuilder(wallet, "Spending P2PKH")
         .addP2PKHInput({
           sourceTransaction,
           sourceOutputIndex: 0,
@@ -1069,7 +1069,7 @@ describe('TransactionTemplate', () => {
       );
 
       // Create spending transaction with multiple inputs
-      const result = await new TransactionTemplate(wallet, "Multiple inputs")
+      const result = await new TransactionBuilder(wallet, "Multiple inputs")
         .addP2PKHInput({
           sourceTransaction: sourceTx1,
           sourceOutputIndex: 0,
@@ -1133,7 +1133,7 @@ describe('TransactionTemplate', () => {
         contentType: 'text/plain'
       };
 
-      const result = await new TransactionTemplate(wallet, "Transfer ordinal")
+      const result = await new TransactionBuilder(wallet, "Transfer ordinal")
         .addOrdinalP2PKHInput({
           sourceTransaction,
           sourceOutputIndex: 0,
@@ -1182,7 +1182,7 @@ describe('TransactionTemplate', () => {
       );
 
       // Test complex chaining: input -> output -> input (different source) -> output
-      const result = await new TransactionTemplate(wallet, "Complex chaining")
+      const result = await new TransactionBuilder(wallet, "Complex chaining")
         .addP2PKHInput({
           sourceTransaction,
           sourceOutputIndex: 0,
@@ -1255,7 +1255,7 @@ describe('TransactionTemplate', () => {
       );
 
       // Create transaction spending both types
-      const result = await new TransactionTemplate(wallet, "Mixed inputs")
+      const result = await new TransactionBuilder(wallet, "Mixed inputs")
         .addP2PKHInput({
           sourceTransaction: p2pkhSource,
           sourceOutputIndex: 0,
@@ -1313,7 +1313,7 @@ describe('TransactionTemplate', () => {
       const metadata = { action: "transfer", timestamp: Date.now() };
 
       // Create spending transaction with metadata
-      const result = await new TransactionTemplate(wallet, "Transfer with metadata")
+      const result = await new TransactionBuilder(wallet, "Transfer with metadata")
         .addP2PKHInput({
           sourceTransaction,
           sourceOutputIndex: 0,

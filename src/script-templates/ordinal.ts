@@ -75,6 +75,11 @@ export default class OrdP2PKH implements ScriptTemplate {
 	 */
   lock (params: OrdinalLockWithWallet): Promise<LockingScript>
   async lock (params: OrdinalLockParams): Promise<LockingScript> {
+    // Validate params exists before accessing properties
+    if (!params || typeof params !== 'object') {
+      throw new Error('One of pubkeyhash, publicKey, or walletParams is required')
+    }
+
     // Validate inscription structure if provided
     if (params.inscription !== undefined) {
       if (typeof params.inscription !== 'object' || params.inscription === null) {

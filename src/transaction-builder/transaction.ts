@@ -40,7 +40,7 @@ import {
  */
 export class InputBuilder {
   constructor (
-    private readonly parent: TransactionTemplate,
+    private readonly parent: TransactionBuilder,
     private readonly inputConfig: InputConfig
   ) { }
 
@@ -132,9 +132,9 @@ export class InputBuilder {
      * Sets transaction-level options (convenience proxy to TransactionTemplate).
      *
      * @param opts - Transaction options (randomizeOutputs, etc.)
-     * @returns The parent TransactionTemplate for transaction-level chaining
+     * @returns The parent TransactionBuilder for transaction-level chaining
      */
-  options (opts: CreateActionOptions): TransactionTemplate {
+  options (opts: CreateActionOptions): TransactionBuilder {
     return this.parent.options(opts)
   }
 
@@ -168,7 +168,7 @@ export class InputBuilder {
  */
 export class OutputBuilder {
   constructor (
-    private readonly parent: TransactionTemplate,
+    private readonly parent: TransactionBuilder,
     private readonly outputConfig: OutputConfig
   ) { }
 
@@ -302,9 +302,9 @@ export class OutputBuilder {
      * Sets transaction-level options (convenience proxy to TransactionTemplate).
      *
      * @param opts - Transaction options (randomizeOutputs, etc.)
-     * @returns The parent TransactionTemplate for transaction-level chaining
+     * @returns The parent TransactionBuilder for transaction-level chaining
      */
-  options (opts: CreateActionOptions): TransactionTemplate {
+  options (opts: CreateActionOptions): TransactionBuilder {
     return this.parent.options(opts)
   }
 
@@ -330,14 +330,14 @@ export class OutputBuilder {
 }
 
 /**
- * TransactionTemplate - Builder class for creating BSV transactions with fluent API.
+ * TransactionBuilder - Builder class for creating BSV transactions with fluent API.
  *
  * This class provides a chainable interface for building transactions with multiple
  * outputs, metadata, and wallet integration. It simplifies the process of creating
  * transactions by abstracting away the low-level details of locking scripts and
  * wallet interactions.
  */
-export class TransactionTemplate {
+export class TransactionBuilder {
   private readonly wallet: WalletInterface
   private _transactionDescription?: string
   private readonly inputs: InputConfig[] = []
@@ -345,14 +345,14 @@ export class TransactionTemplate {
   private transactionOptions: CreateActionOptions = {}
 
   /**
-     * Creates a new TransactionTemplate builder.
+     * Creates a new TransactionBuilder.
      *
      * @param wallet - BRC-100 compatible wallet interface for signing and key derivation
      * @param description - Optional description for the entire transaction
      */
   constructor (wallet: WalletInterface, description?: string) {
     if (!wallet) {
-      throw new Error('Wallet is required for TransactionTemplate')
+      throw new Error('Wallet is required for TransactionBuilder')
     }
     this.wallet = wallet
     this._transactionDescription = description
@@ -362,7 +362,7 @@ export class TransactionTemplate {
      * Sets the transaction-level description.
      *
      * @param desc - Description for the entire transaction
-     * @returns This TransactionTemplate for further chaining
+     * @returns This TransactionBuilder for further chaining
      */
   transactionDescription (desc: string): this {
     if (typeof desc !== 'string') {
@@ -376,7 +376,7 @@ export class TransactionTemplate {
      * Sets transaction-level options.
      *
      * @param opts - Transaction options (randomizeOutputs, trustSelf, signAndProcess, etc.)
-     * @returns This TransactionTemplate for further chaining
+     * @returns This TransactionBuilder for further chaining
      */
   options (opts: CreateActionOptions): this {
     if (!opts || typeof opts !== 'object') {
@@ -462,6 +462,12 @@ export class TransactionTemplate {
      */
   addP2PKHInput (params: AddP2PKHInputParams): InputBuilder {
     // Validate parameters
+    if (!params.sourceTransaction || typeof params.sourceTransaction !== 'object') {
+      throw new Error('sourceTransaction is required and must be a Transaction object')
+    }
+    if (typeof params.sourceTransaction.id !== 'function') {
+      throw new Error('sourceTransaction must be a valid Transaction object with an id() method')
+    }
     if (typeof params.sourceOutputIndex !== 'number' || params.sourceOutputIndex < 0) {
       throw new Error('sourceOutputIndex must be a non-negative number')
     }
@@ -501,6 +507,12 @@ export class TransactionTemplate {
      */
   addOrdinalP2PKHInput (params: AddOrdinalP2PKHInputParams): InputBuilder {
     // Validate parameters
+    if (!params.sourceTransaction || typeof params.sourceTransaction !== 'object') {
+      throw new Error('sourceTransaction is required and must be a Transaction object')
+    }
+    if (typeof params.sourceTransaction.id !== 'function') {
+      throw new Error('sourceTransaction must be a valid Transaction object with an id() method')
+    }
     if (typeof params.sourceOutputIndex !== 'number' || params.sourceOutputIndex < 0) {
       throw new Error('sourceOutputIndex must be a non-negative number')
     }
@@ -540,6 +552,15 @@ export class TransactionTemplate {
     // Validate parameters
     if (!params.unlockingScriptTemplate) {
       throw new Error('unlockingScriptTemplate is required for custom input')
+    }
+    if (typeof params.unlockingScriptTemplate.estimateLength !== 'function') {
+      throw new Error('unlockingScriptTemplate must have an estimateLength() method')
+    }
+    if (!params.sourceTransaction || typeof params.sourceTransaction !== 'object') {
+      throw new Error('sourceTransaction is required and must be a Transaction object')
+    }
+    if (typeof params.sourceTransaction.id !== 'function') {
+      throw new Error('sourceTransaction must be a valid Transaction object with an id() method')
     }
     if (typeof params.sourceOutputIndex !== 'number' || params.sourceOutputIndex < 0) {
       throw new Error('sourceOutputIndex must be a non-negative number')
@@ -701,11 +722,11 @@ export class TransactionTemplate {
      * Builds the transaction using wallet.createAction().
      *
      * This method creates locking scripts for all outputs, applies OP_RETURN metadata
-     * where specified, calls wallet.createAction() with all outputs and options, and
-     * returns the transaction ID and transaction object.
+     * where specified, calls wallet.createAction() with unlockingScriptLength first,
+     * then signs the transaction and calls signAction() to complete and broadcast.
      *
      * @param params - Build parameters (optional). Use { preview: true } to return the createAction arguments without executing
-     * @returns Promise resolving to txid and tx from wallet.createAction(), or preview object if params.preview=true
+     * @returns Promise resolving to txid and tx from wallet.signAction(), or preview object if params.preview=true
      * @throws Error if no outputs are configured or if locking script creation fails
      */
   async build (params?: BuildParams): Promise<CreateActionResult | any> {
@@ -723,11 +744,14 @@ export class TransactionTemplate {
     // Track derivation info for customInstructions
     const derivationInfo: Array<{ outputIndex: number, derivationPrefix: string, derivationSuffix: string }> = []
 
+    // Store unlocking script templates for later signing
+    const unlockingScriptTemplates: any[] = []
+
     // Build the inputs array for wallet.createAction()
     const actionInputsConfig = []
 
-    // Build inputs for the prebuilt transaction for signing
-    const signingInputs = []
+    // Build inputs for the preimage transaction
+    const preimageInputs = []
 
     // Process each input
     for (let i = 0; i < this.inputs.length; i++) {
@@ -745,7 +769,7 @@ export class TransactionTemplate {
           // Create unlocking script template
           const walletParams = config.walletParams
 
-          // Get the unlockingScript template
+          // Get the unlockingScript template for preimage
           unlockingScriptTemplate = p2pkh.unlock({
             protocolID: walletParams?.protocolID,
             keyID: walletParams?.keyID,
@@ -765,31 +789,36 @@ export class TransactionTemplate {
         }
       }
 
+      // Store the unlocking script template for later use
+      unlockingScriptTemplates.push(unlockingScriptTemplate)
+
       // Get txid from source
       const txid = config.sourceTransaction.id('hex')
 
-      // Build action input
+      // Build action input config with unlockingScriptLength from template
+      const unlockingScriptLength = await unlockingScriptTemplate.estimateLength()
       const inputConfig = {
         outpoint: `${txid}.${config.sourceOutputIndex}`,
-        inputDescription: config.description || 'Transaction input'
+        inputDescription: config.description || 'Transaction input',
+        unlockingScriptLength
       }
 
-      // Build the input object
-      const inputForSigning = {
+      // Build the input object for preimage transaction
+      const inputForPreimage = {
         sourceTransaction: config.sourceTransaction,
         sourceOutputIndex: config.sourceOutputIndex,
         unlockingScriptTemplate
       }
 
-      signingInputs.push(inputForSigning)
+      preimageInputs.push(inputForPreimage)
       actionInputsConfig.push(inputConfig)
     }
 
     // Build the outputs array for wallet.createAction()
     const actionOutputs: CreateActionOutput[] = []
 
-    // Prebuilt outputs for signing
-    const signingOutputs = []
+    // Preimage outputs for calculating change
+    const preimageOutputs = []
 
     // Process each output
     for (let i = 0; i < this.outputs.length; i++) {
@@ -898,9 +927,12 @@ export class TransactionTemplate {
             })
           }
 
+          // Determine which overload to call
           if (isDerivationParams(addressOrParams)) {
+            // Use wallet param overload
             lockingScript = await p2pkh.lock({ walletParams: addressOrParams })
           } else {
+            // Use publicKey overload
             lockingScript = await p2pkh.lock({ publicKey: addressOrParams })
           }
           break
@@ -938,20 +970,20 @@ export class TransactionTemplate {
         finalCustomInstructions = config.customInstructions
       }
 
-      // Handle change outputs specially - mark for auto-calculation during signing
+      // Handle change outputs specially - mark for auto-calculation in preimage
       if (config.type === 'change') {
-        // Build the output object for signing with change flag
-        const outputForSigning: any = {
+        // Build the output object for preimage with change flag
+        const outputForPreimage: any = {
           lockingScript,
           change: true // Mark as change output for auto-calculation
         }
 
-        signingOutputs.push(outputForSigning)
+        preimageOutputs.push(outputForPreimage)
 
-        // Add placeholder to actionOutputs - satoshis will be updated after signing
+        // Add placeholder to actionOutputs - satoshis will be updated after preimage
         const output: CreateActionOutput = {
           lockingScript: lockingScript.toHex(),
-          satoshis: 0, // Placeholder - will be updated after signing
+          satoshis: 0, // Placeholder - will be updated after preimage
           outputDescription: config.description || 'Change'
         }
         // Apply combined customInstructions (user + derivation)
@@ -964,7 +996,7 @@ export class TransactionTemplate {
         }
         actionOutputs.push(output)
       } else {
-        // Regular output - add to both signing and action outputs
+        // Regular output - add to both preimage and action outputs
         const output: CreateActionOutput = {
           lockingScript: lockingScript.toHex(),
           satoshis: config.satoshis, // Non-change outputs must have satoshis
@@ -979,13 +1011,13 @@ export class TransactionTemplate {
           output.basket = config.basket
         }
 
-        // Build the output object for signing
-        const outputForSigning = {
+        // Build the output object for preimage
+        const outputForPreimage = {
           lockingScript,
           satoshis: config.satoshis
         }
 
-        signingOutputs.push(outputForSigning)
+        preimageOutputs.push(outputForPreimage)
         actionOutputs.push(output)
       }
     }
@@ -995,83 +1027,65 @@ export class TransactionTemplate {
       ...this.transactionOptions
     }
 
-    // Build the inputs array for wallet.createAction()
-    const actionInputs: CreateActionInput[] = []
     let inputBEEF: number[] | undefined
 
-    // Only build and sign transaction if there are inputs
-    if (signingInputs.length > 0) {
-      // Build the signable transaction
-      const tx = new Transaction()
-      signingInputs.forEach((input) => {
-        tx.addInput(input)
+    // Only build preimage transaction if there are inputs
+    if (preimageInputs.length > 0) {
+      // Build the preimage transaction to calculate change amounts
+      const preimageTx = new Transaction()
+      preimageInputs.forEach((input) => {
+        preimageTx.addInput(input)
       })
-      signingOutputs.forEach((output) => {
+      preimageOutputs.forEach((output) => {
         if (output.change) {
           // Change output - don't specify satoshis, will be calculated
-          tx.addOutput({
+          preimageTx.addOutput({
             lockingScript: output.lockingScript,
             change: true
           })
         } else {
           // Regular output with specified satoshis
-          tx.addOutput({
+          preimageTx.addOutput({
             satoshis: output.satoshis,
             lockingScript: output.lockingScript
           })
         }
       })
 
-      // Calculate fee and sign
-      await tx.fee(new SatoshisPerKilobyte(DEFAULT_SAT_PER_KB))
-      await tx.sign()
+      // Calculate fee and sign preimage to get change amounts
+      await preimageTx.fee(new SatoshisPerKilobyte(DEFAULT_SAT_PER_KB))
+      await preimageTx.sign()
 
-      // Combine the config with the signed unlocking scripts
-      for (let i = 0; i < actionInputsConfig.length; i++) {
-        const config = actionInputsConfig[i]
-        const signedInput = tx.inputs[i]
-
-        if (signedInput.unlockingScript == null) {
-          throw new Error(`Failed to generate unlocking script for input ${i}`)
-        }
-
-        actionInputs.push({
-          outpoint: config.outpoint,
-          inputDescription: config.inputDescription,
-          unlockingScript: signedInput.unlockingScript.toHex()
-        })
-      }
-
-      // Update change output satoshis from signed transaction
+      // Update change output satoshis from preimage transaction
       for (let i = 0; i < this.outputs.length; i++) {
         const config = this.outputs[i]
 
         if (config.type === 'change') {
-          // Find the corresponding output in the signed transaction
-          const signedOutput = tx.outputs[i]
+          // Find the corresponding output in the preimage transaction
+          const preimageOutput = preimageTx.outputs[i]
 
-          if (!signedOutput) {
-            throw new Error(`Change output at index ${i} not found in signed transaction`)
+          if (!preimageOutput) {
+            throw new Error(`Change output at index ${i} not found in preimage transaction`)
           }
 
           // Validate that satoshis were calculated
-          if (signedOutput.satoshis === undefined) {
+          if (preimageOutput.satoshis === undefined) {
             throw new Error(`Change output at index ${i} has no satoshis after fee calculation`)
           }
 
           // Update the placeholder satoshis with calculated value
-          actionOutputs[i].satoshis = signedOutput.satoshis
+          actionOutputs[i].satoshis = preimageOutput.satoshis
         }
       }
 
       // Get all the inputBEEFs needed for createAction and merge them
       // For a single input, just use its BEEF directly
-      if (signingInputs.length === 1) {
-        inputBEEF = signingInputs[0].sourceTransaction.toBEEF()
+      if (preimageInputs.length === 1) {
+        inputBEEF = preimageInputs[0].sourceTransaction.toBEEF()
       } else {
         // For multiple inputs, merge the BEEFs
         const mergedBeef = new Beef()
-        signingInputs.forEach((input) => {
+        preimageInputs.forEach((input) => {
           const beef = input.sourceTransaction.toBEEF()
           mergedBeef.mergeBeef(beef)
         })
@@ -1079,11 +1093,11 @@ export class TransactionTemplate {
       }
     }
 
-    // Build the createAction arguments object
+    // Build the createAction arguments object with unlockingScriptLength
     const createActionArgs = {
       description: this._transactionDescription || 'Transaction',
       ...((inputBEEF != null) && { inputBEEF }),
-      ...(actionInputs.length > 0 && { inputs: actionInputs }),
+      ...(actionInputsConfig.length > 0 && { inputs: actionInputsConfig }),
       outputs: actionOutputs,
       options: createActionOptions
     }
@@ -1093,12 +1107,55 @@ export class TransactionTemplate {
       return createActionArgs
     }
 
-    // Call wallet.createAction()
-    const result = await this.wallet.createAction(createActionArgs)
+    // Call wallet.createAction() with unlockingScriptLength
+    const actionRes = await this.wallet.createAction(createActionArgs)
+
+    // If there are no inputs, return the result directly (no signing needed)
+    if (this.inputs.length === 0) {
+      return {
+        txid: actionRes.txid,
+        tx: actionRes.tx
+      }
+    }
+
+    // Extract the signable transaction
+    if ((actionRes?.signableTransaction) == null) {
+      throw new Error('Failed to create signable transaction')
+    }
+
+    const reference = actionRes.signableTransaction.reference
+    const txToSign = Transaction.fromBEEF(actionRes.signableTransaction.tx)
+
+    // Add unlocking script templates and source transactions to inputs
+    // The templates already have the correct sighash flags from user configuration
+    for (let i = 0; i < this.inputs.length; i++) {
+      const config = this.inputs[i]
+      txToSign.inputs[i].unlockingScriptTemplate = unlockingScriptTemplates[i]
+      txToSign.inputs[i].sourceTransaction = config.sourceTransaction
+    }
+
+    // Sign the complete transaction
+    await txToSign.sign()
+
+    // Extract the unlocking scripts
+    const spends: { [key: string]: { unlockingScript: string } } = {}
+    for (let i = 0; i < this.inputs.length; i++) {
+      const unlockingScript = txToSign.inputs[i].unlockingScript?.toHex()
+      if (!unlockingScript) {
+        throw new Error(`Missing unlocking script for input ${i}`)
+      }
+      spends[String(i)] = { unlockingScript }
+    }
+
+    // Sign the action with the actual unlocking scripts
+    const signedAction = await this.wallet.signAction({
+      reference,
+      spends
+    })
 
     return {
-      txid: result.txid,
-      tx: result.tx
+      txid: signedAction.txid,
+      tx: signedAction.tx
     }
   }
 

@@ -91,6 +91,11 @@ export default class P2PKH implements ScriptTemplate {
      */
   lock (params: P2PKHLockWithWallet): Promise<LockingScript>
   async lock (params: P2PKHLockParams): Promise<LockingScript> {
+    // Validate params exists before using 'in' operator
+    if (!params || typeof params !== 'object') {
+      throw new Error('One of pubkeyhash, publicKey, or walletParams is required')
+    }
+
     let data: number[] | undefined
 
     // Process based on which parameter was provided

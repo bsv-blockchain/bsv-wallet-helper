@@ -5,9 +5,6 @@ export {
   type Inscription,
   type MAP,
   // Script template parameter types
-  type P2PKHLockWithPubkeyhash,
-  type P2PKHLockWithPublicKey,
-  type P2PKHLockWithWallet,
   type P2PKHLockParams,
   type P2PKHUnlockParams,
   type OrdinalLockWithPubkeyhash,
@@ -17,9 +14,9 @@ export {
   type OrdinalUnlockParams
 } from './script-templates/index.js'
 
-// Transaction Templates
+// Transaction Builder
 export {
-  TransactionTemplate,
+  TransactionBuilder,
   OutputBuilder,
   InputBuilder,
   type BuildParams,
@@ -41,7 +38,7 @@ export {
   type AddP2PKHInputParams,
   type AddOrdinalP2PKHInputParams,
   type AddCustomInputParams
-} from './transaction-template/index.js'
+} from './transaction-builder/index.js'
 
 // Types
 export { type WalletDerivationParams } from './types/index.js'

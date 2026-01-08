@@ -4,9 +4,6 @@ export { type WalletDerivationParams } from '../types/wallet.js'
 
 // Export all parameter types
 export {
-  type P2PKHLockWithPubkeyhash,
-  type P2PKHLockWithPublicKey,
-  type P2PKHLockWithWallet,
   type P2PKHLockParams,
   type P2PKHUnlockParams,
   type OrdinalLockWithPubkeyhash,

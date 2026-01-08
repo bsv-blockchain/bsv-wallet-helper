@@ -20,14 +20,14 @@ npm install bsv-wallet-helper
 
 ### Transaction Builder
 
-#### `TransactionTemplate`
+#### `TransactionBuilder`
 Fluent transaction builder that simplifies creating BSV transactions with a clean, chainable API.
 
 ```typescript
-import { TransactionTemplate } from 'bsv-wallet-helper';
+import { TransactionBuilder } from 'bsv-wallet-helper';
 
 // Simple P2PKH transaction with metadata
-const result = await new TransactionTemplate(wallet, "Payment to Bob")
+const result = await new TransactionBuilder(wallet, "Payment to Bob")
   .addP2PKHOutput({ publicKey: bobPublicKey, satoshis: 1000, description: "Payment" })
     .addOpReturn(['APP_ID', JSON.stringify({ memo: 'Thanks!' })])
   .build();
@@ -35,7 +35,7 @@ const result = await new TransactionTemplate(wallet, "Payment to Bob")
 console.log(`Transaction created: ${result.txid}`);
 
 // Preview mode - see what will be sent without executing
-const preview = await new TransactionTemplate(wallet)
+const preview = await new TransactionBuilder(wallet)
   .addP2PKHOutput({ publicKey: alicePublicKey, satoshis: 5000 })
   .build({ preview: true });
 
@@ -53,12 +53,12 @@ console.log('Transaction preview:', preview);
 - Preview mode to inspect before execution
 - Input support for spending UTXOs
 
-📖 **[Complete Documentation](./docs/transaction-template.md)**
+📖 **[Complete Documentation](./docs/transaction-builder.md)**
 
 **Example with automatic change:**
 ```typescript
 // Change is automatically calculated: inputs - outputs - fees
-await new TransactionTemplate(wallet, "Payment with change")
+await new TransactionBuilder(wallet, "Payment with change")
   .addP2PKHInput({ sourceTransaction, sourceOutputIndex: 0, walletParams, description: "UTXO" })
   .addP2PKHOutput({ publicKey: recipientPublicKey, satoshis: 5000, description: "Payment" })
   .addChangeOutput({ walletParams, description: "Change" }) // Satoshis calculated automatically!
@@ -69,7 +69,7 @@ await new TransactionTemplate(wallet, "Payment with change")
 ```typescript
 // Omit publicKey/walletParams to use automatic BRC-29 derivation
 // Derivation info is automatically added to customInstructions
-await new TransactionTemplate(wallet, "Auto-derived transaction")
+await new TransactionBuilder(wallet, "Auto-derived transaction")
   .addP2PKHOutput({ satoshis: 1000, description: "Payment" })  // Uses BRC-29 derivation
     .basket("my-basket")  // Set basket for this output
     .customInstructions("app-specific-data")  // Append custom instructions
@@ -292,19 +292,9 @@ const updated = await ordP2pkh.lock({
 });
 ```
 
-## Comparison with Official SDK
-
-| Feature | Official SDK P2PKH | This Library (WalletP2PKH) |
-|---------|-------------------|----------------------------|
-| Private Key Required | ✅ Yes | ❌ No |
-| BRC-100 Wallet Support | ❌ No | ✅ Yes |
-| Hierarchical Key Derivation | ❌ No | ✅ Yes |
-| Hardware Wallet Compatible | ❌ No | ✅ Yes |
-| Ordinals Support | ❌ No | ✅ Yes (WalletOrdP2PKH) |
-
 ## License
 
-MIT
+See [LICENSE.md](./LICENSE.md)
 
 ## Contributing
 

@@ -22,7 +22,7 @@ var index_exports = {};
 __export(index_exports, {
   InputBuilder: () => InputBuilder,
   OutputBuilder: () => OutputBuilder,
-  TransactionTemplate: () => TransactionTemplate,
+  TransactionBuilder: () => TransactionBuilder,
   WalletOrdP2PKH: () => OrdP2PKH,
   WalletP2PKH: () => P2PKH,
   addOpReturnData: () => addOpReturnData,
@@ -134,6 +134,9 @@ var P2PKH = class {
     this.wallet = wallet;
   }
   async lock(params) {
+    if (!params || typeof params !== "object") {
+      throw new Error("One of pubkeyhash, publicKey, or walletParams is required");
+    }
     let data;
     if ("pubkeyhash" in params) {
       data = params.pubkeyhash;
@@ -268,6 +271,9 @@ var OrdP2PKH = class {
     this.p2pkh = new P2PKH(wallet);
   }
   async lock(params) {
+    if (!params || typeof params !== "object") {
+      throw new Error("One of pubkeyhash, publicKey, or walletParams is required");
+    }
     if (params.inscription !== void 0) {
       if (typeof params.inscription !== "object" || params.inscription === null) {
         throw new Error("inscription must be an object with dataB64 and contentType properties");
@@ -353,7 +359,7 @@ var applyInscription = (lockingScript, inscription, metaData, withSeparator = fa
   return import_sdk3.LockingScript.fromASM(inscriptionAsm);
 };
 
-// src/transaction-template/transaction.ts
+// src/transaction-builder/transaction.ts
 var import_sdk8 = require("@bsv/sdk");
 
 // src/utils/mockWallet.ts
@@ -733,12 +739,12 @@ function extractOpReturnData(input) {
   return dataFields.length > 0 ? dataFields : null;
 }
 
-// src/transaction-template/types/type-guards.ts
+// src/transaction-builder/types/type-guards.ts
 function isDerivationParams(value) {
   return typeof value === "object" && value !== null && !Array.isArray(value);
 }
 
-// src/transaction-template/transaction.ts
+// src/transaction-builder/transaction.ts
 var InputBuilder = class {
   constructor(parent, inputConfig) {
     this.parent = parent;
@@ -824,7 +830,7 @@ var InputBuilder = class {
      * Sets transaction-level options (convenience proxy to TransactionTemplate).
      *
      * @param opts - Transaction options (randomizeOutputs, etc.)
-     * @returns The parent TransactionTemplate for transaction-level chaining
+     * @returns The parent TransactionBuilder for transaction-level chaining
      */
   options(opts) {
     return this.parent.options(opts);
@@ -972,7 +978,7 @@ var OutputBuilder = class {
      * Sets transaction-level options (convenience proxy to TransactionTemplate).
      *
      * @param opts - Transaction options (randomizeOutputs, etc.)
-     * @returns The parent TransactionTemplate for transaction-level chaining
+     * @returns The parent TransactionBuilder for transaction-level chaining
      */
   options(opts) {
     return this.parent.options(opts);
@@ -996,9 +1002,9 @@ var OutputBuilder = class {
     return await this.parent.build({ preview: true });
   }
 };
-var TransactionTemplate = class {
+var TransactionBuilder = class {
   /**
-     * Creates a new TransactionTemplate builder.
+     * Creates a new TransactionBuilder.
      *
      * @param wallet - BRC-100 compatible wallet interface for signing and key derivation
      * @param description - Optional description for the entire transaction
@@ -1008,7 +1014,7 @@ var TransactionTemplate = class {
     this.outputs = [];
     this.transactionOptions = {};
     if (!wallet) {
-      throw new Error("Wallet is required for TransactionTemplate");
+      throw new Error("Wallet is required for TransactionBuilder");
     }
     this.wallet = wallet;
     this._transactionDescription = description;
@@ -1017,7 +1023,7 @@ var TransactionTemplate = class {
      * Sets the transaction-level description.
      *
      * @param desc - Description for the entire transaction
-     * @returns This TransactionTemplate for further chaining
+     * @returns This TransactionBuilder for further chaining
      */
   transactionDescription(desc) {
     if (typeof desc !== "string") {
@@ -1030,7 +1036,7 @@ var TransactionTemplate = class {
      * Sets transaction-level options.
      *
      * @param opts - Transaction options (randomizeOutputs, trustSelf, signAndProcess, etc.)
-     * @returns This TransactionTemplate for further chaining
+     * @returns This TransactionBuilder for further chaining
      */
   options(opts) {
     if (!opts || typeof opts !== "object") {
@@ -1105,6 +1111,12 @@ var TransactionTemplate = class {
      * @returns An InputBuilder for the new input
      */
   addP2PKHInput(params) {
+    if (!params.sourceTransaction || typeof params.sourceTransaction !== "object") {
+      throw new Error("sourceTransaction is required and must be a Transaction object");
+    }
+    if (typeof params.sourceTransaction.id !== "function") {
+      throw new Error("sourceTransaction must be a valid Transaction object with an id() method");
+    }
     if (typeof params.sourceOutputIndex !== "number" || params.sourceOutputIndex < 0) {
       throw new Error("sourceOutputIndex must be a non-negative number");
     }
@@ -1140,6 +1152,12 @@ var TransactionTemplate = class {
      * @returns An InputBuilder for the new input
      */
   addOrdinalP2PKHInput(params) {
+    if (!params.sourceTransaction || typeof params.sourceTransaction !== "object") {
+      throw new Error("sourceTransaction is required and must be a Transaction object");
+    }
+    if (typeof params.sourceTransaction.id !== "function") {
+      throw new Error("sourceTransaction must be a valid Transaction object with an id() method");
+    }
     if (typeof params.sourceOutputIndex !== "number" || params.sourceOutputIndex < 0) {
       throw new Error("sourceOutputIndex must be a non-negative number");
     }
@@ -1175,6 +1193,15 @@ var TransactionTemplate = class {
   addCustomInput(params) {
     if (!params.unlockingScriptTemplate) {
       throw new Error("unlockingScriptTemplate is required for custom input");
+    }
+    if (typeof params.unlockingScriptTemplate.estimateLength !== "function") {
+      throw new Error("unlockingScriptTemplate must have an estimateLength() method");
+    }
+    if (!params.sourceTransaction || typeof params.sourceTransaction !== "object") {
+      throw new Error("sourceTransaction is required and must be a Transaction object");
+    }
+    if (typeof params.sourceTransaction.id !== "function") {
+      throw new Error("sourceTransaction must be a valid Transaction object with an id() method");
     }
     if (typeof params.sourceOutputIndex !== "number" || params.sourceOutputIndex < 0) {
       throw new Error("sourceOutputIndex must be a non-negative number");
@@ -1308,11 +1335,11 @@ var TransactionTemplate = class {
      * Builds the transaction using wallet.createAction().
      *
      * This method creates locking scripts for all outputs, applies OP_RETURN metadata
-     * where specified, calls wallet.createAction() with all outputs and options, and
-     * returns the transaction ID and transaction object.
+     * where specified, calls wallet.createAction() with unlockingScriptLength first,
+     * then signs the transaction and calls signAction() to complete and broadcast.
      *
      * @param params - Build parameters (optional). Use { preview: true } to return the createAction arguments without executing
-     * @returns Promise resolving to txid and tx from wallet.createAction(), or preview object if params.preview=true
+     * @returns Promise resolving to txid and tx from wallet.signAction(), or preview object if params.preview=true
      * @throws Error if no outputs are configured or if locking script creation fails
      */
   async build(params) {
@@ -1324,8 +1351,9 @@ var TransactionTemplate = class {
       throw new Error("Change outputs require at least one input");
     }
     const derivationInfo = [];
+    const unlockingScriptTemplates = [];
     const actionInputsConfig = [];
-    const signingInputs = [];
+    const preimageInputs = [];
     for (let i = 0; i < this.inputs.length; i++) {
       const config = this.inputs[i];
       let unlockingScriptTemplate;
@@ -1351,21 +1379,24 @@ var TransactionTemplate = class {
           throw new Error(`Unsupported input type: ${config.type}`);
         }
       }
+      unlockingScriptTemplates.push(unlockingScriptTemplate);
       const txid = config.sourceTransaction.id("hex");
+      const unlockingScriptLength = await unlockingScriptTemplate.estimateLength();
       const inputConfig = {
         outpoint: `${txid}.${config.sourceOutputIndex}`,
-        inputDescription: config.description || "Transaction input"
+        inputDescription: config.description || "Transaction input",
+        unlockingScriptLength
       };
-      const inputForSigning = {
+      const inputForPreimage = {
         sourceTransaction: config.sourceTransaction,
         sourceOutputIndex: config.sourceOutputIndex,
         unlockingScriptTemplate
       };
-      signingInputs.push(inputForSigning);
+      preimageInputs.push(inputForPreimage);
       actionInputsConfig.push(inputConfig);
     }
     const actionOutputs = [];
-    const signingOutputs = [];
+    const preimageOutputs = [];
     for (let i = 0; i < this.outputs.length; i++) {
       const config = this.outputs[i];
       let lockingScript;
@@ -1477,16 +1508,16 @@ var TransactionTemplate = class {
         finalCustomInstructions = config.customInstructions;
       }
       if (config.type === "change") {
-        const outputForSigning = {
+        const outputForPreimage = {
           lockingScript,
           change: true
           // Mark as change output for auto-calculation
         };
-        signingOutputs.push(outputForSigning);
+        preimageOutputs.push(outputForPreimage);
         const output = {
           lockingScript: lockingScript.toHex(),
           satoshis: 0,
-          // Placeholder - will be updated after signing
+          // Placeholder - will be updated after preimage
           outputDescription: config.description || "Change"
         };
         if (finalCustomInstructions) {
@@ -1509,69 +1540,56 @@ var TransactionTemplate = class {
         if (config.basket) {
           output.basket = config.basket;
         }
-        const outputForSigning = {
+        const outputForPreimage = {
           lockingScript,
           satoshis: config.satoshis
         };
-        signingOutputs.push(outputForSigning);
+        preimageOutputs.push(outputForPreimage);
         actionOutputs.push(output);
       }
     }
     const createActionOptions = {
       ...this.transactionOptions
     };
-    const actionInputs = [];
     let inputBEEF;
-    if (signingInputs.length > 0) {
-      const tx = new import_sdk8.Transaction();
-      signingInputs.forEach((input) => {
-        tx.addInput(input);
+    if (preimageInputs.length > 0) {
+      const preimageTx = new import_sdk8.Transaction();
+      preimageInputs.forEach((input) => {
+        preimageTx.addInput(input);
       });
-      signingOutputs.forEach((output) => {
+      preimageOutputs.forEach((output) => {
         if (output.change) {
-          tx.addOutput({
+          preimageTx.addOutput({
             lockingScript: output.lockingScript,
             change: true
           });
         } else {
-          tx.addOutput({
+          preimageTx.addOutput({
             satoshis: output.satoshis,
             lockingScript: output.lockingScript
           });
         }
       });
-      await tx.fee(new import_sdk8.SatoshisPerKilobyte(DEFAULT_SAT_PER_KB));
-      await tx.sign();
-      for (let i = 0; i < actionInputsConfig.length; i++) {
-        const config = actionInputsConfig[i];
-        const signedInput = tx.inputs[i];
-        if (signedInput.unlockingScript == null) {
-          throw new Error(`Failed to generate unlocking script for input ${i}`);
-        }
-        actionInputs.push({
-          outpoint: config.outpoint,
-          inputDescription: config.inputDescription,
-          unlockingScript: signedInput.unlockingScript.toHex()
-        });
-      }
+      await preimageTx.fee(new import_sdk8.SatoshisPerKilobyte(DEFAULT_SAT_PER_KB));
+      await preimageTx.sign();
       for (let i = 0; i < this.outputs.length; i++) {
         const config = this.outputs[i];
         if (config.type === "change") {
-          const signedOutput = tx.outputs[i];
-          if (!signedOutput) {
-            throw new Error(`Change output at index ${i} not found in signed transaction`);
+          const preimageOutput = preimageTx.outputs[i];
+          if (!preimageOutput) {
+            throw new Error(`Change output at index ${i} not found in preimage transaction`);
           }
-          if (signedOutput.satoshis === void 0) {
+          if (preimageOutput.satoshis === void 0) {
             throw new Error(`Change output at index ${i} has no satoshis after fee calculation`);
           }
-          actionOutputs[i].satoshis = signedOutput.satoshis;
+          actionOutputs[i].satoshis = preimageOutput.satoshis;
         }
       }
-      if (signingInputs.length === 1) {
-        inputBEEF = signingInputs[0].sourceTransaction.toBEEF();
+      if (preimageInputs.length === 1) {
+        inputBEEF = preimageInputs[0].sourceTransaction.toBEEF();
       } else {
         const mergedBeef = new import_sdk8.Beef();
-        signingInputs.forEach((input) => {
+        preimageInputs.forEach((input) => {
           const beef = input.sourceTransaction.toBEEF();
           mergedBeef.mergeBeef(beef);
         });
@@ -1581,17 +1599,46 @@ var TransactionTemplate = class {
     const createActionArgs = {
       description: this._transactionDescription || "Transaction",
       ...inputBEEF != null && { inputBEEF },
-      ...actionInputs.length > 0 && { inputs: actionInputs },
+      ...actionInputsConfig.length > 0 && { inputs: actionInputsConfig },
       outputs: actionOutputs,
       options: createActionOptions
     };
     if (params?.preview) {
       return createActionArgs;
     }
-    const result = await this.wallet.createAction(createActionArgs);
+    const actionRes = await this.wallet.createAction(createActionArgs);
+    if (this.inputs.length === 0) {
+      return {
+        txid: actionRes.txid,
+        tx: actionRes.tx
+      };
+    }
+    if (actionRes?.signableTransaction == null) {
+      throw new Error("Failed to create signable transaction");
+    }
+    const reference = actionRes.signableTransaction.reference;
+    const txToSign = import_sdk8.Transaction.fromBEEF(actionRes.signableTransaction.tx);
+    for (let i = 0; i < this.inputs.length; i++) {
+      const config = this.inputs[i];
+      txToSign.inputs[i].unlockingScriptTemplate = unlockingScriptTemplates[i];
+      txToSign.inputs[i].sourceTransaction = config.sourceTransaction;
+    }
+    await txToSign.sign();
+    const spends = {};
+    for (let i = 0; i < this.inputs.length; i++) {
+      const unlockingScript = txToSign.inputs[i].unlockingScript?.toHex();
+      if (!unlockingScript) {
+        throw new Error(`Missing unlocking script for input ${i}`);
+      }
+      spends[String(i)] = { unlockingScript };
+    }
+    const signedAction = await this.wallet.signAction({
+      reference,
+      spends
+    });
     return {
-      txid: result.txid,
-      tx: result.tx
+      txid: signedAction.txid,
+      tx: signedAction.tx
     };
   }
   /**
@@ -1608,7 +1655,7 @@ var TransactionTemplate = class {
 0 && (module.exports = {
   InputBuilder,
   OutputBuilder,
-  TransactionTemplate,
+  TransactionBuilder,
   WalletOrdP2PKH,
   WalletP2PKH,
   addOpReturnData,

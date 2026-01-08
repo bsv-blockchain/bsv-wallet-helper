@@ -589,7 +589,7 @@ interface AddCustomInputParams {
 declare class InputBuilder {
     private readonly parent;
     private readonly inputConfig;
-    constructor(parent: TransactionTemplate, inputConfig: InputConfig);
+    constructor(parent: TransactionBuilder, inputConfig: InputConfig);
     /**
        * Sets the description for THIS input only.
        *
@@ -650,9 +650,9 @@ declare class InputBuilder {
        * Sets transaction-level options (convenience proxy to TransactionTemplate).
        *
        * @param opts - Transaction options (randomizeOutputs, etc.)
-       * @returns The parent TransactionTemplate for transaction-level chaining
+       * @returns The parent TransactionBuilder for transaction-level chaining
        */
-    options(opts: CreateActionOptions): TransactionTemplate;
+    options(opts: CreateActionOptions): TransactionBuilder;
     /**
        * Builds the transaction using wallet.createAction() (convenience proxy to TransactionTemplate).
        *
@@ -678,7 +678,7 @@ declare class InputBuilder {
 declare class OutputBuilder {
     private readonly parent;
     private readonly outputConfig;
-    constructor(parent: TransactionTemplate, outputConfig: OutputConfig);
+    constructor(parent: TransactionBuilder, outputConfig: OutputConfig);
     /**
        * Adds OP_RETURN data to THIS output only.
        *
@@ -760,9 +760,9 @@ declare class OutputBuilder {
        * Sets transaction-level options (convenience proxy to TransactionTemplate).
        *
        * @param opts - Transaction options (randomizeOutputs, etc.)
-       * @returns The parent TransactionTemplate for transaction-level chaining
+       * @returns The parent TransactionBuilder for transaction-level chaining
        */
-    options(opts: CreateActionOptions): TransactionTemplate;
+    options(opts: CreateActionOptions): TransactionBuilder;
     /**
        * Builds the transaction using wallet.createAction() (convenience proxy to TransactionTemplate).
        *
@@ -779,21 +779,21 @@ declare class OutputBuilder {
     preview(): Promise<any>;
 }
 /**
- * TransactionTemplate - Builder class for creating BSV transactions with fluent API.
+ * TransactionBuilder - Builder class for creating BSV transactions with fluent API.
  *
  * This class provides a chainable interface for building transactions with multiple
  * outputs, metadata, and wallet integration. It simplifies the process of creating
  * transactions by abstracting away the low-level details of locking scripts and
  * wallet interactions.
  */
-declare class TransactionTemplate {
+declare class TransactionBuilder {
     private readonly wallet;
     private _transactionDescription?;
     private readonly inputs;
     private readonly outputs;
     private transactionOptions;
     /**
-       * Creates a new TransactionTemplate builder.
+       * Creates a new TransactionBuilder.
        *
        * @param wallet - BRC-100 compatible wallet interface for signing and key derivation
        * @param description - Optional description for the entire transaction
@@ -803,14 +803,14 @@ declare class TransactionTemplate {
        * Sets the transaction-level description.
        *
        * @param desc - Description for the entire transaction
-       * @returns This TransactionTemplate for further chaining
+       * @returns This TransactionBuilder for further chaining
        */
     transactionDescription(desc: string): this;
     /**
        * Sets transaction-level options.
        *
        * @param opts - Transaction options (randomizeOutputs, trustSelf, signAndProcess, etc.)
-       * @returns This TransactionTemplate for further chaining
+       * @returns This TransactionBuilder for further chaining
        */
     options(opts: CreateActionOptions): this;
     /**
@@ -891,11 +891,11 @@ declare class TransactionTemplate {
        * Builds the transaction using wallet.createAction().
        *
        * This method creates locking scripts for all outputs, applies OP_RETURN metadata
-       * where specified, calls wallet.createAction() with all outputs and options, and
-       * returns the transaction ID and transaction object.
+       * where specified, calls wallet.createAction() with unlockingScriptLength first,
+       * then signs the transaction and calls signAction() to complete and broadcast.
        *
        * @param params - Build parameters (optional). Use { preview: true } to return the createAction arguments without executing
-       * @returns Promise resolving to txid and tx from wallet.createAction(), or preview object if params.preview=true
+       * @returns Promise resolving to txid and tx from wallet.signAction(), or preview object if params.preview=true
        * @throws Error if no outputs are configured or if locking script creation fails
        */
     build(params?: BuildParams): Promise<CreateActionResult | any>;
@@ -1227,4 +1227,4 @@ declare function extractOpReturnData(script: LockingScript | Script): string[] |
  */
 declare function extractOpReturnData(hex: string): string[] | null;
 
-export { type AddChangeOutputParams, type AddChangeOutputWithAutoDerivation, type AddChangeOutputWithPublicKey, type AddChangeOutputWithWallet, type AddCustomInputParams, type AddCustomOutputParams, type AddOrdinalP2PKHInputParams, type AddOrdinalP2PKHOutputParams, type AddOrdinalP2PKHOutputWithAutoDerivation, type AddOrdinalP2PKHOutputWithPublicKey, type AddOrdinalP2PKHOutputWithWallet, type AddP2PKHInputParams, type AddP2PKHOutputParams, type AddP2PKHOutputWithAutoDerivation, type AddP2PKHOutputWithPublicKey, type AddP2PKHOutputWithWallet, type BuildParams, InputBuilder, type Inscription, type InscriptionData, type MAP$1 as MAP, type OrdinalLockParams, type OrdinalLockWithPubkeyhash, type OrdinalLockWithPublicKey, type OrdinalLockWithWallet, type OrdinalUnlockParams, OutputBuilder, type P2PKHLockParams, type P2PKHLockWithPubkeyhash, type P2PKHLockWithPublicKey, type P2PKHLockWithWallet, type P2PKHUnlockParams, type ScriptType, TransactionTemplate, type WalletDerivationParams, OrdP2PKH as WalletOrdP2PKH, P2PKH as WalletP2PKH, addOpReturnData, calculatePreimage, extractInscriptionData, extractMapMetadata, extractOpReturnData, getDerivation, getScriptType, hasOpReturnData, hasOrd, isOrdinal, isP2PKH, makeWallet };
+export { type AddChangeOutputParams, type AddChangeOutputWithAutoDerivation, type AddChangeOutputWithPublicKey, type AddChangeOutputWithWallet, type AddCustomInputParams, type AddCustomOutputParams, type AddOrdinalP2PKHInputParams, type AddOrdinalP2PKHOutputParams, type AddOrdinalP2PKHOutputWithAutoDerivation, type AddOrdinalP2PKHOutputWithPublicKey, type AddOrdinalP2PKHOutputWithWallet, type AddP2PKHInputParams, type AddP2PKHOutputParams, type AddP2PKHOutputWithAutoDerivation, type AddP2PKHOutputWithPublicKey, type AddP2PKHOutputWithWallet, type BuildParams, InputBuilder, type Inscription, type InscriptionData, type MAP$1 as MAP, type OrdinalLockParams, type OrdinalLockWithPubkeyhash, type OrdinalLockWithPublicKey, type OrdinalLockWithWallet, type OrdinalUnlockParams, OutputBuilder, type P2PKHLockParams, type P2PKHUnlockParams, type ScriptType, TransactionBuilder, type WalletDerivationParams, OrdP2PKH as WalletOrdP2PKH, P2PKH as WalletP2PKH, addOpReturnData, calculatePreimage, extractInscriptionData, extractMapMetadata, extractOpReturnData, getDerivation, getScriptType, hasOpReturnData, hasOrd, isOrdinal, isP2PKH, makeWallet };
