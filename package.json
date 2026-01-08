@@ -20,7 +20,7 @@
     "lint:ci-disabled": "ts-standard src/**/*.ts",
     "lint": "ts-standard --fix src/**/*.ts",
     "test:watch": "jest --watch",
-    "test:coverage": "jest --coverage",
+    "test:coverage-disabled": "jest --coverage",
     "build": "tsup"
   },
   "keywords": [],
