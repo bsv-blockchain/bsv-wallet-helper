@@ -15,6 +15,10 @@
   "files": [
     "dist"
   ],
+  "repository": { 
+    "type": "git", 
+    "url": "https://github.com/bsv-blockchain/bsv-wallet-helper.git" 
+  },
   "scripts": {
     "test": "jest",
     "lint:ci-disabled": "ts-standard src/**/*.ts",
