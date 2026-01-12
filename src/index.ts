@@ -49,6 +49,7 @@ export {
   calculatePreimage,
   addOpReturnData,
   getDerivation,
+  getAddress,
   // Script validation
   isP2PKH,
   isOrdinal,

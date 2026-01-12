@@ -288,18 +288,63 @@ type InscriptionData = {
 
 ## Key Derivation
 
-### `getDerivation(wallet, params?)`
+### `getDerivation()`
 
-Gets key derivation information from a wallet using BRC-29 standard derivation.
+Generates a random BRC-29 key derivation with protocolID and keyID.
 
 ```typescript
 import { getDerivation } from 'bsv-wallet-helper';
 
-// Use BRC-29 derivation
-const { publicKey, derivationPrefix, derivationSuffix } = await getDerivation(wallet);
+const derivation = getDerivation();
+// { protocolID: [array], keyID: 'randomPrefix randomSuffix' }
+```
+
+**Returns:** `{ protocolID: [2, 'BRC29'], keyID: string }`
+- `protocolID`: BRC-29 protocol identifier array
+- `keyID`: Random derivation string (base64 prefix + space + base64 suffix)
+
+### `getAddress(wallet, amount?)`
+
+Generates multiple unique BSV addresses with their complete wallet parameters using parallel wallet key derivation. Each result includes the address and all the wallet parameters needed to later unlock UTXOs sent to that address.
+
+```typescript
+import { getAddress } from 'bsv-wallet-helper';
+
+// Generate a single address (default)
+const results = await getAddress(wallet);
+// [{
+//   address: '1ABC...',
+//   walletParams: {
+//     protocolID: [2, 'BRC29'],
+//     keyID: 'xyz123 abc456',
+//     counterparty: 'anyone'
+//   }
+// }]
+
+// Generate multiple addresses in parallel
+const results = await getAddress(wallet, 5);
+
+// Use the walletParams directly in P2PKH unlocking
+const p2pkh = new WalletP2PKH(wallet);
+const unlockingScript = p2pkh.unlock(results[0].walletParams);
 ```
 
 **Parameters:**
 - `wallet`: `WalletInterface` - BRC-100 compatible wallet
+- `amount?`: `number` - Number of addresses to generate (default: 1)
 
-**Returns:** `Promise<{ publicKey: string, derivationPrefix: string, derivationSuffix: string }>`
+**Returns:** `Promise<AddressWithParams[]>` - Array of objects containing:
+- `address`: `string` - BSV address derived from the public key
+- `walletParams`: `object` - Complete wallet parameters for unlocking:
+  - `protocolID`: `WalletProtocol` - BRC-29 protocol identifier
+  - `keyID`: `string` - Random derivation keyID
+  - `counterparty`: `string` - Counterparty identifier (set to 'anyone')
+
+**Throws:**
+- `Error` if wallet is not provided
+- `Error` if amount is less than 1
+- `Error` if wallet key derivation fails
+
+**Performance Note:** Uses parallel execution for efficient batch address generation.
+
+**Use Case:** Perfect for generating receiving addresses where you need to store the wallet parameters alongside each address to later unlock and spend UTXOs.

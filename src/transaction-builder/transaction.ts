@@ -1057,6 +1057,9 @@ export class TransactionBuilder {
       await preimageTx.sign()
 
       // Update change output satoshis from preimage transaction
+      // Track indices of outputs to remove (change outputs with insufficient satoshis)
+      const outputIndicesToRemove: number[] = []
+
       for (let i = 0; i < this.outputs.length; i++) {
         const config = this.outputs[i]
 
@@ -1064,8 +1067,10 @@ export class TransactionBuilder {
           // Find the corresponding output in the preimage transaction
           const preimageOutput = preimageTx.outputs[i]
 
+          // If the change output was removed due to insufficient satoshis, mark for removal
           if (!preimageOutput) {
-            throw new Error(`Change output at index ${i} not found in preimage transaction`)
+            outputIndicesToRemove.push(i)
+            continue
           }
 
           // Validate that satoshis were calculated
@@ -1076,6 +1081,13 @@ export class TransactionBuilder {
           // Update the placeholder satoshis with calculated value
           actionOutputs[i].satoshis = preimageOutput.satoshis
         }
+      }
+
+      // Remove outputs that couldn't be created due to insufficient satoshis
+      // Iterate in reverse to maintain correct indices during removal
+      for (let i = outputIndicesToRemove.length - 1; i >= 0; i--) {
+        const indexToRemove = outputIndicesToRemove[i]
+        actionOutputs.splice(indexToRemove, 1)
       }
 
       // Get all the inputBEEFs needed for createAction and merge them

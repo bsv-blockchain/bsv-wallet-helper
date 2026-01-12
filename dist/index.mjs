@@ -433,7 +433,7 @@ var addOpReturnData = (script, fields) => {
 
 // src/utils/derivation.ts
 import { brc29ProtocolID } from "@bsv/wallet-toolbox-client";
-import { Random, Utils as Utils3 } from "@bsv/sdk";
+import { Random, Utils as Utils3, PublicKey as PublicKey2 } from "@bsv/sdk";
 function getDerivation() {
   const derivationPrefix = Utils3.toBase64(Random(8));
   const derivationSuffix = Utils3.toBase64(Random(8));
@@ -441,6 +441,38 @@ function getDerivation() {
     protocolID: brc29ProtocolID,
     keyID: derivationPrefix + " " + derivationSuffix
   };
+}
+async function getAddress(wallet, amount = 1, counterparty = "self") {
+  if (!wallet) {
+    throw new Error("Wallet is required");
+  }
+  if (amount < 1) {
+    throw new Error("Amount must be greater than 0");
+  }
+  try {
+    const addressPromises = Array.from({ length: amount }, async () => {
+      const derivation = getDerivation();
+      const { publicKey } = await wallet.getPublicKey({
+        protocolID: derivation.protocolID,
+        keyID: derivation.keyID,
+        counterparty
+      });
+      const address = PublicKey2.fromString(publicKey).toAddress();
+      return {
+        address,
+        walletParams: {
+          protocolID: derivation.protocolID,
+          keyID: derivation.keyID,
+          counterparty
+        }
+      };
+    });
+    const addresses = await Promise.all(addressPromises);
+    return addresses;
+  } catch (error) {
+    const message = error instanceof Error ? error.message : "Failed to generate addresses";
+    throw new Error(message);
+  }
 }
 
 // src/utils/scriptValidation.ts
@@ -1550,18 +1582,24 @@ var TransactionBuilder = class {
       });
       await preimageTx.fee(new SatoshisPerKilobyte(DEFAULT_SAT_PER_KB));
       await preimageTx.sign();
+      const outputIndicesToRemove = [];
       for (let i = 0; i < this.outputs.length; i++) {
         const config = this.outputs[i];
         if (config.type === "change") {
           const preimageOutput = preimageTx.outputs[i];
           if (!preimageOutput) {
-            throw new Error(`Change output at index ${i} not found in preimage transaction`);
+            outputIndicesToRemove.push(i);
+            continue;
           }
           if (preimageOutput.satoshis === void 0) {
             throw new Error(`Change output at index ${i} has no satoshis after fee calculation`);
           }
           actionOutputs[i].satoshis = preimageOutput.satoshis;
         }
+      }
+      for (let i = outputIndicesToRemove.length - 1; i >= 0; i--) {
+        const indexToRemove = outputIndicesToRemove[i];
+        actionOutputs.splice(indexToRemove, 1);
       }
       if (preimageInputs.length === 1) {
         inputBEEF = preimageInputs[0].sourceTransaction.toBEEF();
@@ -1640,6 +1678,7 @@ export {
   extractInscriptionData,
   extractMapMetadata,
   extractOpReturnData,
+  getAddress,
   getDerivation,
   getScriptType,
   hasOpReturnData,

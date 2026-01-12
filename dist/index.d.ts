@@ -1,4 +1,3 @@
-import * as _bsv_sdk from '@bsv/sdk';
 import { WalletProtocol, WalletCounterparty, ScriptTemplate, WalletInterface, LockingScript, Transaction, UnlockingScript, Script, CreateActionOptions, CreateActionResult, WalletClient } from '@bsv/sdk';
 
 /**
@@ -946,9 +945,18 @@ declare function calculatePreimage(tx: Transaction, inputIndex: number, signOutp
 declare const addOpReturnData: (script: LockingScript, fields: Array<string | number[]>) => LockingScript;
 
 declare function getDerivation(): {
-    protocolID: _bsv_sdk.WalletProtocol;
+    protocolID: WalletProtocol;
     keyID: string;
 };
+interface AddressWithParams {
+    address: string;
+    walletParams: {
+        protocolID: WalletProtocol;
+        keyID: string;
+        counterparty: string;
+    };
+}
+declare function getAddress(wallet: WalletInterface, amount?: number, counterparty?: string): Promise<AddressWithParams[]>;
 
 /**
  * Checks if a locking script is a standard P2PKH (Pay-to-Public-Key-Hash) script.
@@ -1227,4 +1235,4 @@ declare function extractOpReturnData(script: LockingScript | Script): string[] |
  */
 declare function extractOpReturnData(hex: string): string[] | null;
 
-export { type AddChangeOutputParams, type AddChangeOutputWithAutoDerivation, type AddChangeOutputWithPublicKey, type AddChangeOutputWithWallet, type AddCustomInputParams, type AddCustomOutputParams, type AddOrdinalP2PKHInputParams, type AddOrdinalP2PKHOutputParams, type AddOrdinalP2PKHOutputWithAutoDerivation, type AddOrdinalP2PKHOutputWithPublicKey, type AddOrdinalP2PKHOutputWithWallet, type AddP2PKHInputParams, type AddP2PKHOutputParams, type AddP2PKHOutputWithAutoDerivation, type AddP2PKHOutputWithPublicKey, type AddP2PKHOutputWithWallet, type BuildParams, InputBuilder, type Inscription, type InscriptionData, type MAP$1 as MAP, type OrdinalLockParams, type OrdinalLockWithPubkeyhash, type OrdinalLockWithPublicKey, type OrdinalLockWithWallet, type OrdinalUnlockParams, OutputBuilder, type P2PKHLockParams, type P2PKHUnlockParams, type ScriptType, TransactionBuilder, type WalletDerivationParams, OrdP2PKH as WalletOrdP2PKH, P2PKH as WalletP2PKH, addOpReturnData, calculatePreimage, extractInscriptionData, extractMapMetadata, extractOpReturnData, getDerivation, getScriptType, hasOpReturnData, hasOrd, isOrdinal, isP2PKH, makeWallet };
+export { type AddChangeOutputParams, type AddChangeOutputWithAutoDerivation, type AddChangeOutputWithPublicKey, type AddChangeOutputWithWallet, type AddCustomInputParams, type AddCustomOutputParams, type AddOrdinalP2PKHInputParams, type AddOrdinalP2PKHOutputParams, type AddOrdinalP2PKHOutputWithAutoDerivation, type AddOrdinalP2PKHOutputWithPublicKey, type AddOrdinalP2PKHOutputWithWallet, type AddP2PKHInputParams, type AddP2PKHOutputParams, type AddP2PKHOutputWithAutoDerivation, type AddP2PKHOutputWithPublicKey, type AddP2PKHOutputWithWallet, type BuildParams, InputBuilder, type Inscription, type InscriptionData, type MAP$1 as MAP, type OrdinalLockParams, type OrdinalLockWithPubkeyhash, type OrdinalLockWithPublicKey, type OrdinalLockWithWallet, type OrdinalUnlockParams, OutputBuilder, type P2PKHLockParams, type P2PKHUnlockParams, type ScriptType, TransactionBuilder, type WalletDerivationParams, OrdP2PKH as WalletOrdP2PKH, P2PKH as WalletP2PKH, addOpReturnData, calculatePreimage, extractInscriptionData, extractMapMetadata, extractOpReturnData, getAddress, getDerivation, getScriptType, hasOpReturnData, hasOrd, isOrdinal, isP2PKH, makeWallet };
