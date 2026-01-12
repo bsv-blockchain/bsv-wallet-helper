@@ -1,6 +1,6 @@
 {
   "name": "@bsv/wallet-helper",
-  "version": "0.0.2",
+  "version": "0.0.3",
   "description": "",
   "main": "dist/index.js",
   "module": "dist/index.mjs",
@@ -15,9 +15,9 @@
   "files": [
     "dist"
   ],
-  "repository": { 
-    "type": "git", 
-    "url": "https://github.com/bsv-blockchain/bsv-wallet-helper.git" 
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/bsv-blockchain/bsv-wallet-helper.git"
   },
   "scripts": {
     "test": "jest",
