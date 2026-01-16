@@ -117,7 +117,8 @@ export default class P2PKH implements ScriptTemplate {
       const { publicKey } = await this.wallet.getPublicKey({
         protocolID,
         keyID,
-        counterparty
+        counterparty,
+        forSelf: counterparty === 'anyone' ? true : false
       })
       const pubKeyToHash = PublicKey.fromString(publicKey)
       data = pubKeyToHash.toHash() as number[]
@@ -205,14 +206,15 @@ export default class P2PKH implements ScriptTemplate {
           hashToDirectlySign: Hash.hash256(preimage),
           protocolID,
           keyID,
-          counterparty
+          counterparty,
         })
 
         // Retrieve the public key from the wallet for the same key used to sign
         const { publicKey } = await wallet.getPublicKey({
           protocolID,
           keyID,
-          counterparty
+          counterparty,
+          forSelf: true,
         })
 
         // Convert the DER-encoded signature to a TransactionSignature with the proper signature scope
