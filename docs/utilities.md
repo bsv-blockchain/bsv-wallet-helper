@@ -9,7 +9,7 @@ Helper functions and utilities for working with BSV transactions and scripts.
 Creates a BRC-100 compatible wallet for testing or backend use.
 
 ```typescript
-import { makeWallet } from 'bsv-wallet-helper';
+import { makeWallet } from '@bsv/wallet-helper';
 
 const wallet = await makeWallet(
   'test',                    // Chain: 'test' or 'main'
@@ -32,7 +32,7 @@ const wallet = await makeWallet(
 Calculates the transaction preimage for signing.
 
 ```typescript
-import { calculatePreimage } from 'bsv-wallet-helper';
+import { calculatePreimage } from '@bsv/wallet-helper';
 
 const { preimage, signatureScope } = calculatePreimage(
   transaction,
@@ -63,7 +63,7 @@ const { preimage, signatureScope } = calculatePreimage(
 Appends OP_RETURN data fields to any locking script for adding metadata.
 
 ```typescript
-import { addOpReturnData } from 'bsv-wallet-helper';
+import { addOpReturnData } from '@bsv/wallet-helper';
 
 // Add plain text metadata
 const scriptWithMetadata = addOpReturnData(lockingScript, [
@@ -115,7 +115,7 @@ Helper functions to validate, identify, and extract data from different Bitcoin 
 Checks if a script is a standard Pay-to-Public-Key-Hash (P2PKH) script.
 
 ```typescript
-import { isP2PKH } from 'bsv-wallet-helper';
+import { isP2PKH } from '@bsv/wallet-helper';
 
 if (isP2PKH(lockingScript)) {
   console.log('This is a P2PKH script');
@@ -127,7 +127,7 @@ if (isP2PKH(lockingScript)) {
 Checks if a script contains both a BSV-20 Ordinal inscription envelope AND a P2PKH script.
 
 ```typescript
-import { isOrdinal } from 'bsv-wallet-helper';
+import { isOrdinal } from '@bsv/wallet-helper';
 
 if (isOrdinal(lockingScript)) {
   console.log('This is a BSV-20 Ordinal with P2PKH');
@@ -139,7 +139,7 @@ if (isOrdinal(lockingScript)) {
 Checks if a script contains a BSV-20 Ordinal inscription envelope.
 
 ```typescript
-import { hasOrd } from 'bsv-wallet-helper';
+import { hasOrd } from '@bsv/wallet-helper';
 
 if (hasOrd(lockingScript)) {
   console.log('This script contains a BSV-20 ordinal inscription');
@@ -151,7 +151,7 @@ if (hasOrd(lockingScript)) {
 Checks if a script contains OP_RETURN data.
 
 ```typescript
-import { hasOpReturnData } from 'bsv-wallet-helper';
+import { hasOpReturnData } from '@bsv/wallet-helper';
 
 if (hasOpReturnData(lockingScript)) {
   console.log('This script has OP_RETURN data');
@@ -167,7 +167,7 @@ Determines the type of a Bitcoin script.
 Returns one of: `'P2PKH'` | `'Ordinal'` | `'OpReturn'` | `'Custom'`
 
 ```typescript
-import { getScriptType, type ScriptType } from 'bsv-wallet-helper';
+import { getScriptType, type ScriptType } from '@bsv/wallet-helper';
 
 const type = getScriptType(lockingScript);
 
@@ -196,7 +196,7 @@ Extracts OP_RETURN data fields from a script.
 Returns an array of base64-encoded strings, or `null` if no OP_RETURN found. Base64 encoding supports arbitrary binary data including images, videos, and other file types.
 
 ```typescript
-import { extractOpReturnData } from 'bsv-wallet-helper';
+import { extractOpReturnData } from '@bsv/wallet-helper';
 
 const data = extractOpReturnData(script);
 if (data) {
@@ -217,7 +217,7 @@ Extracts MAP (Magic Attribute Protocol) metadata from a script.
 Returns a `MAP` object with `app` and `type` fields (plus any additional fields), or `null` if no MAP data found.
 
 ```typescript
-import { extractMapMetadata, type MAP } from 'bsv-wallet-helper';
+import { extractMapMetadata, type MAP } from '@bsv/wallet-helper';
 
 const metadata = extractMapMetadata(ordinalScript);
 if (metadata) {
@@ -243,7 +243,7 @@ Extracts inscription data from a BSV-20 Ordinal script.
 Returns an object with `dataB64` (base64-encoded data) and `contentType` (MIME type), or `null` if not found.
 
 ```typescript
-import { extractInscriptionData, type InscriptionData } from 'bsv-wallet-helper';
+import { extractInscriptionData, type InscriptionData } from '@bsv/wallet-helper';
 
 const inscription = extractInscriptionData(ordinalScript);
 if (inscription) {
@@ -293,7 +293,7 @@ type InscriptionData = {
 Generates a random BRC-29 key derivation with protocolID and keyID.
 
 ```typescript
-import { getDerivation } from 'bsv-wallet-helper';
+import { getDerivation } from '@bsv/wallet-helper';
 
 const derivation = getDerivation();
 // { protocolID: [array], keyID: 'randomPrefix randomSuffix' }
@@ -308,7 +308,7 @@ const derivation = getDerivation();
 Generates multiple unique BSV addresses with their complete wallet parameters using parallel wallet key derivation. Each result includes the address and all the wallet parameters needed to later unlock UTXOs sent to that address.
 
 ```typescript
-import { getAddress } from 'bsv-wallet-helper';
+import { getAddress } from '@bsv/wallet-helper';
 
 // Generate a single address (default)
 const results = await getAddress(wallet);

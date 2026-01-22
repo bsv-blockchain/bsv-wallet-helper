@@ -9,8 +9,8 @@ This document provides examples of how to use the new script validation helper f
 Checks if a script is a standard Pay-to-Public-Key-Hash (P2PKH) script.
 
 ```typescript
-import { isP2PKH } from 'bsv-wallet-helper';
-import P2PKH from 'bsv-wallet-helper/script-templates/p2pkh';
+import { isP2PKH } from '@bsv/wallet-helper';
+import P2PKH from '@bsv/wallet-helper/script-templates/p2pkh';
 
 // Using with LockingScript
 const p2pkh = new P2PKH();
@@ -34,8 +34,8 @@ Checks if a script contains both a BSV-20 Ordinal inscription envelope AND a P2P
 The BSV-20 standard uses the envelope format: `OP_0 OP_IF 'ord' OP_1 'application/bsv-20' OP_0`
 
 ```typescript
-import { isOrdinal } from 'bsv-wallet-helper';
-import OrdP2PKH from 'bsv-wallet-helper/script-templates/ordinal';
+import { isOrdinal } from '@bsv/wallet-helper';
+import OrdP2PKH from '@bsv/wallet-helper/script-templates/ordinal';
 
 const ordP2PKH = new OrdP2PKH();
 const script = await ordP2PKH.lock({
@@ -58,7 +58,7 @@ Checks if a script contains a BSV-20 Ordinal inscription envelope (regardless of
 The BSV-20 envelope starts with: `OP_0 OP_IF 'ord' OP_1 'application/bsv-20' OP_0`
 
 ```typescript
-import { hasOrd } from 'bsv-wallet-helper';
+import { hasOrd } from '@bsv/wallet-helper';
 
 // This checks for the presence of the BSV-20 ordinal envelope only
 if (hasOrd(script)) {
@@ -77,8 +77,8 @@ if (hasOrd(hex)) {
 Checks if a script contains OP_RETURN data.
 
 ```typescript
-import { hasOpReturnData, addOpReturnData } from 'bsv-wallet-helper';
-import P2PKH from 'bsv-wallet-helper/script-templates/p2pkh';
+import { hasOpReturnData, addOpReturnData } from '@bsv/wallet-helper';
+import P2PKH from '@bsv/wallet-helper/script-templates/p2pkh';
 
 const p2pkh = new P2PKH();
 const baseScript = await p2pkh.lock({ publicKey: '02...' });
@@ -108,7 +108,7 @@ import {
   isOrdinal,
   hasOrd,
   hasOpReturnData
-} from 'bsv-wallet-helper';
+} from '@bsv/wallet-helper';
 
 function analyzeScript(script: LockingScript) {
   console.log('Script Analysis:');

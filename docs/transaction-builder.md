@@ -24,65 +24,76 @@ A fluent transaction builder for creating BSV transactions with a clean, chainab
 
 ### Why Use TransactionBuilder?
 
-**Before (Manual Transaction Building with Inputs):**
+**Before (Manual Transaction Building with 3-Step Workflow):**
 ```typescript
 // Complex, error-prone, hard to read - especially with inputs!
-const p2pkh = new P2PKH(wallet);
+const p2pkh = new WalletP2PKH(wallet);
 
-// 1. Build unlocking script template
 const walletParams = {
   protocolID: [2, 'p2pkh'],
   keyID: '0',
   counterparty: 'self'
 };
-const unlockingTemplate = p2pkh.unlock(
-  walletParams.protocolID,
-  walletParams.keyID,
-  walletParams.counterparty
-);
 
-// 2. Build outputs
-const outputLockingScript = await p2pkh.lock(recipientPublicKey);
+// Build the output locking script
+const outputLockingScript = await p2pkh.lock({ publicKey: recipientPublicKey });
 const scriptWithMetadata = addOpReturnData(outputLockingScript, ['data']);
 
-// 3. Build temporary transaction for signing
-const tx = new Transaction();
-tx.addInput({
-  sourceTransaction: sourceTransaction,
-  sourceOutputIndex: 0,
-  unlockingScriptTemplate: unlockingTemplate
-});
-tx.addOutput({
-  lockingScript: scriptWithMetadata,
-  satoshis: 1000
-});
+// Create unlock template for input
+const unlockTemplate = p2pkh.unlock(walletParams);
+const unlockingScriptLength = await unlockTemplate.estimateLength();
 
-// 4. Sign the transaction
-await tx.fee(new SatoshisPerKilobyte(50));
-await tx.sign();
-
-// 5. Extract signed unlocking scripts
-const signedUnlockingScript = tx.inputs[0].unlockingScript.toHex();
-
-// 6. Build BEEF
-const inputBEEF = sourceTransaction.toBEEF();
-
-// 7. Finally call createAction with all the pieces
-const result = await wallet.createAction({
+// Step 1: createAction (Prepare Transaction)
+const actionRes = await wallet.createAction({
   description: "My transaction",
-  inputBEEF: inputBEEF,
-  inputs: [{
-    outpoint: `${sourceTransaction.id('hex')}.0`,
-    unlockingScript: signedUnlockingScript,
-    inputDescription: "Input"
-  }],
-  outputs: [{
-    lockingScript: scriptWithMetadata.toHex(),
-    satoshis: 1000,
-    outputDescription: "Output"
-  }],
-  options: { randomizeOutputs: false }
+  inputBEEF: sourceTransaction.toBEEF(),
+  inputs: [
+    {
+      inputDescription: "Input",
+      outpoint: `${sourceTransaction.id('hex')}.0`,
+      unlockingScriptLength: unlockingScriptLength,
+    }
+  ],
+  outputs: [
+    {
+      outputDescription: "Output",
+      lockingScript: scriptWithMetadata.toHex(),
+      satoshis: 1000,
+    }
+  ],
+  options: {
+    randomizeOutputs: false,
+  }
 });
+
+// Step 2: Sign (Generate Unlocking Scripts)
+const reference = actionRes.signableTransaction.reference;
+const txToSign = Transaction.fromBEEF(actionRes.signableTransaction.tx);
+
+txToSign.inputs[0].unlockingScriptTemplate = unlockTemplate;
+txToSign.inputs[0].sourceTransaction = sourceTransaction;
+
+await txToSign.sign();
+
+const unlockingScript = txToSign.inputs[0].unlockingScript;
+
+if (!unlockingScript) {
+  throw new Error('Missing unlocking script after signing');
+}
+
+// Step 3: signAction (Finalize Transaction)
+const action = await wallet.signAction({
+  reference: reference,
+  spends: {
+    '0': { unlockingScript: unlockingScript.toHex() }
+  }
+});
+
+if (!action.tx) {
+  throw new Error('Failed to sign action');
+}
+
+const tx = Transaction.fromAtomicBEEF(action.tx);
 ```
 
 **After (TransactionBuilder):**
@@ -114,13 +125,13 @@ TransactionBuilder handles all the complexity:
 ### Installation
 
 ```bash
-npm install bsv-wallet-helper
+npm install @bsv/wallet-helper
 ```
 
 ### Basic Transaction
 
 ```typescript
-import { TransactionBuilder, makeWallet } from 'bsv-wallet-helper';
+import { TransactionBuilder, makeWallet } from '@bsv/wallet-helper';
 import { WalletClient } from '@bsv/sdk';
 
 // Create wallet or use WalletClient
@@ -266,7 +277,7 @@ addChangeOutput(params?: AddChangeOutputParams): OutputBuilder
 
 **Example:**
 ```typescript
-import { TransactionBuilder } from 'bsv-wallet-helper';
+import { TransactionBuilder } from '@bsv/wallet-helper';
 import { Transaction } from '@bsv/sdk';
 
 // Create change output with wallet derivation
@@ -974,7 +985,7 @@ const result = await builder.build();
 ### Type-Safe Wallet Derivation
 
 ```typescript
-import { WalletDerivationParams, WalletProtocol, WalletCounterparty } from 'bsv-wallet-helper';
+import { WalletDerivationParams, WalletProtocol, WalletCounterparty } from '@bsv/wallet-helper';
 
 const derivationParams: WalletDerivationParams = {
   protocolID: [2, 'p2pkh'] as WalletProtocol,
@@ -1017,7 +1028,7 @@ const spendResult = await new TransactionBuilder(wallet, "Spending stored UTXO")
 When using wallet derivation, store the parameters with your UTXO. This is **especially important for change outputs**:
 
 ```typescript
-import { TransactionBuilder } from 'bsv-wallet-helper';
+import { TransactionBuilder } from '@bsv/wallet-helper';
 import { Transaction } from '@bsv/sdk';
 
 // ✅ Good: Store params for later spending

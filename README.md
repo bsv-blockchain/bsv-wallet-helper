@@ -13,7 +13,7 @@ Wallet-compatible utilities and script templates for Bitcoin SV (BSV) that suppo
 ## Installation
 
 ```bash
-npm install bsv-wallet-helper
+npm install @bsv/wallet-helper
 ```
 
 ## Exported API
@@ -24,7 +24,7 @@ npm install bsv-wallet-helper
 Fluent transaction builder that simplifies creating BSV transactions with a clean, chainable API.
 
 ```typescript
-import { TransactionBuilder } from 'bsv-wallet-helper';
+import { TransactionBuilder } from '@bsv/wallet-helper';
 
 // Simple P2PKH transaction with metadata
 const result = await new TransactionBuilder(wallet, "Payment to Bob")
@@ -84,7 +84,7 @@ await new TransactionBuilder(wallet, "Auto-derived transaction")
 Wallet-compatible Pay-to-Public-Key-Hash template.
 
 ```typescript
-import { WalletP2PKH, type WalletDerivationParams } from 'bsv-wallet-helper';
+import { WalletP2PKH, type WalletDerivationParams } from '@bsv/wallet-helper';
 
 // Option 1: Direct public key
 const p2pkh = new WalletP2PKH();
@@ -112,7 +112,7 @@ const unlockingTemplate = p2pkh.unlock({
 Wallet-compatible template for 1Sat Ordinals with inscription and MAP metadata support.
 
 ```typescript
-import { WalletOrdP2PKH, type Inscription, type MAP } from 'bsv-wallet-helper';
+import { WalletOrdP2PKH, type Inscription, type MAP } from '@bsv/wallet-helper';
 
 // Create ordinal with inscription and metadata
 const ordP2pkh = new WalletOrdP2PKH(wallet);
