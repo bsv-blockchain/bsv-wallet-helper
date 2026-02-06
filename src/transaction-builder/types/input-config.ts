@@ -17,6 +17,18 @@ export type InputConfig =
       lockingScript?: Script
     }
     | {
+      type: 'ordLock'
+      sourceTransaction: Transaction
+      sourceOutputIndex: number
+      description?: string
+      kind?: 'cancel' | 'purchase'
+      walletParams?: WalletDerivationParams
+      signOutputs?: 'all' | 'none' | 'single'
+      anyoneCanPay?: boolean
+      sourceSatoshis?: number
+      lockingScript?: Script
+    }
+    | {
       type: 'ordinalP2PKH'
       sourceTransaction: Transaction
       sourceOutputIndex: number

@@ -19,7 +19,7 @@ export interface AddressWithParams {
   }
 }
 
-export async function getAddress(wallet: WalletInterface, amount: number = 1, counterparty: string = "self"): Promise<AddressWithParams[]> {
+export async function getAddress(wallet: WalletInterface, amount: number = 1, counterparty: string = "anyone"): Promise<AddressWithParams[]> {
   if (!wallet) {
     throw new Error('Wallet is required')
   }

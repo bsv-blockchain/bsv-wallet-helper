@@ -351,6 +351,44 @@ builder.addOrdinalP2PKHOutput({
 
 ---
 
+#### `addOrdLockOutput()`
+
+Add an OrdLock output (used for marketplace-style ordinal listings).
+
+```typescript
+addOrdLockOutput(params: AddOrdLockOutputParams): OutputBuilder
+```
+
+**Parameters:**
+- `params` - Named parameter object:
+  - `ordAddress: string` - Address that can cancel the listing (typically the seller)
+  - `payAddress: string` - Address that must receive the payment on purchase (typically the seller)
+  - `price: number` - Satoshis that must be paid to `payAddress` on purchase
+  - `assetId: string` - Arbitrary asset identifier for application indexing
+  - `metadata?: MAP` - Optional MAP metadata
+  - `satoshis: number` - Satoshis locked in the OrdLock output itself (typically `1`)
+  - `description?: string`
+
+**Returns:** `OutputBuilder` for configuring this output
+
+**Example:**
+```typescript
+const result = await new TransactionBuilder(sellerWallet, 'Create listing')
+  .addOrdLockOutput({
+    ordAddress: sellerAddress,
+    payAddress: sellerAddress,
+    price: 1000,
+    assetId: 'my-asset-1',
+    metadata: { app: 'marketplace', type: 'listing' },
+    satoshis: 1,
+    description: 'OrdLock listing'
+  })
+  .options({ randomizeOutputs: false })
+  .build()
+```
+
+---
+
 #### `addCustomOutput()`
 
 Add an output with a custom locking script.
@@ -583,6 +621,36 @@ addCustomInput(params: AddCustomInputParams): InputBuilder
 
 ---
 
+#### `addOrdLockInput()`
+
+Add an OrdLock input.
+
+OrdLock supports two spend paths:
+- **Cancel**: seller cancels their own listing using a wallet signature.
+- **Purchase**: buyer purchases the listing; the unlocking script commits to the final transaction outputs.
+
+```typescript
+addOrdLockInput(params: AddOrdLockInputParams): InputBuilder
+```
+
+**Parameters:**
+- `params` - Named parameter object:
+  - `sourceTransaction: Transaction` (required)
+  - `sourceOutputIndex: number` (required)
+  - `kind?: 'cancel' | 'purchase'` (default: `'cancel'`)
+  - `walletParams?: WalletDerivationParams` (used for `kind: 'cancel'`)
+  - `signOutputs?: 'all' | 'none' | 'single'` (used for `kind: 'cancel'`)
+  - `anyoneCanPay?: boolean` (used for `kind: 'cancel'`)
+  - `sourceSatoshis?: number` (optional preimage hints)
+  - `lockingScript?: Script` (optional preimage hints)
+  - `description?: string`
+
+**Returns:** `InputBuilder` for configuring this input
+
+**Important:** For `kind: 'purchase'`, the unlocking script size depends on the final outputs of the transaction (see [OrdLock Mechanics](#ordlock-mechanics)).
+
+---
+
 ### InputBuilder Methods
 
 #### `inputDescription()`
@@ -794,6 +862,80 @@ const result = await new TransactionBuilder(wallet, "NFT Transfer")
     description: "NFT Ownership Transfer"
   })
   .build();
+```
+
+---
+
+### OrdLock (Marketplace Listing)
+
+OrdLock is a script template intended for marketplace-style ordinal listings.
+
+It has two spend paths:
+
+- **Cancel**: the seller cancels their own listing (wallet signature path).
+- **Purchase**: the buyer purchases the listing. The unlocking script commits to the final transaction outputs.
+
+#### Output ordering requirements (purchase)
+
+When spending an OrdLock listing with `kind: 'purchase'`, the contract expects the transaction outputs to be ordered as:
+
+- **Output 0**: the ordinal (typically 1 sat) to the buyer
+- **Output 1**: the payment to the seller (must equal the listing `price`, to the listing `payAddress`)
+- **Output 2+**: optional additional outputs (including change)
+
+For deterministic results, set `randomizeOutputs: false`.
+
+If the wallet adds a change output implicitly, that changes the final outputs set and can change the purchase unlocking script size. If you want the output set to be explicit, include an `.addChangeOutput(...)`.
+
+#### Example: create listing, cancel, purchase
+
+```typescript
+import { TransactionBuilder } from '@bsv/wallet-helper'
+import { PublicKey, Transaction } from '@bsv/sdk'
+
+// Seller creates a listing
+const sellerAddress = PublicKey.fromString(sellerPubKey).toAddress().toString()
+
+const listing = await new TransactionBuilder(sellerWallet, 'Create OrdLock listing')
+  .addOrdLockOutput({
+    ordAddress: sellerAddress,
+    payAddress: sellerAddress,
+    price: 1000,
+    assetId: 'my-asset-1',
+    metadata: { app: 'marketplace', type: 'listing' },
+    satoshis: 1,
+    description: 'Listing output'
+  })
+  .options({ randomizeOutputs: false })
+  .build()
+
+const listingTx = Transaction.fromAtomicBEEF(listing.tx)
+
+// Seller cancels the listing (spend the OrdLock output)
+await new TransactionBuilder(sellerWallet, 'Cancel OrdLock listing')
+  .addOrdLockInput({
+    sourceTransaction: listingTx,
+    sourceOutputIndex: 0,
+    kind: 'cancel',
+    walletParams: { protocolID: [0, 'ordlock'], keyID: '0', counterparty: 'self' },
+    description: 'Spend OrdLock listing (cancel)'
+  })
+  .addP2PKHOutput({ publicKey: sellerPubKey, satoshis: 1, description: 'Return ordinal to seller' })
+  .options({ randomizeOutputs: false })
+  .build()
+
+// Buyer purchases the listing
+await new TransactionBuilder(buyerWallet, 'Purchase OrdLock listing')
+  .addOrdLockInput({
+    sourceTransaction: listingTx,
+    sourceOutputIndex: 0,
+    kind: 'purchase',
+    description: 'Spend OrdLock listing (purchase)'
+  })
+  .addP2PKHOutput({ publicKey: buyerPubKey, satoshis: 1, description: 'Buyer receives ordinal' }) // Output 0
+  .addP2PKHOutput({ publicKey: sellerPubKey, satoshis: 1000, description: 'Payment to seller' }) // Output 1
+  .options({ randomizeOutputs: false })
+  .build()
 ```
 
 ---

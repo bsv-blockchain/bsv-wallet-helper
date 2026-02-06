@@ -14,6 +14,7 @@ import {
 } from '@bsv/sdk'
 import P2PKH from '../script-templates/p2pkh'
 import OrdP2PKH, { Inscription, MAP } from '../script-templates/ordinal'
+import OrdLock from '../script-templates/ordlock'
 import { WalletDerivationParams } from '../types/wallet'
 import { getDerivation } from '../utils'
 import { addOpReturnData } from '../utils/opreturn'
@@ -26,9 +27,11 @@ import {
   AddP2PKHOutputParams,
   AddChangeOutputParams,
   AddOrdinalP2PKHOutputParams,
+  AddOrdLockOutputParams,
   AddCustomOutputParams,
   AddP2PKHInputParams,
   AddOrdinalP2PKHInputParams,
+  AddOrdLockInputParams,
   AddCustomInputParams
 } from './types'
 
@@ -79,6 +82,16 @@ export class InputBuilder {
   }
 
   /**
+     * Adds an OrdLock input to the transaction.
+     *
+     * @param params - Object containing input parameters
+     * @returns A new InputBuilder for the new input
+     */
+  addOrdLockInput (params: AddOrdLockInputParams): InputBuilder {
+    return this.parent.addOrdLockInput(params)
+  }
+
+  /**
      * Adds a custom input with a pre-built unlocking script template.
      *
      * @param params - Object containing input parameters
@@ -116,6 +129,16 @@ export class InputBuilder {
      */
   addOrdinalP2PKHOutput (params: AddOrdinalP2PKHOutputParams): OutputBuilder {
     return this.parent.addOrdinalP2PKHOutput(params)
+  }
+
+  /**
+     * Adds an OrdLock output to the transaction.
+     *
+     * @param params - Object containing output parameters
+     * @returns A new OutputBuilder for configuring this output
+     */
+  addOrdLockOutput (params: AddOrdLockOutputParams): OutputBuilder {
+    return this.parent.addOrdLockOutput(params)
   }
 
   /**
@@ -254,6 +277,10 @@ export class OutputBuilder {
     return this.parent.addOrdinalP2PKHInput(params)
   }
 
+  addOrdLockInput (params: AddOrdLockInputParams): InputBuilder {
+    return this.parent.addOrdLockInput(params)
+  }
+
   /**
      * Adds a custom input with a pre-built unlocking script template.
      *
@@ -272,6 +299,10 @@ export class OutputBuilder {
      */
   addOrdinalP2PKHOutput (params: AddOrdinalP2PKHOutputParams): OutputBuilder {
     return this.parent.addOrdinalP2PKHOutput(params)
+  }
+
+  addOrdLockOutput (params: AddOrdLockOutputParams): OutputBuilder {
+    return this.parent.addOrdLockOutput(params)
   }
 
   /**
@@ -492,6 +523,48 @@ export class TransactionBuilder {
   }
 
   /**
+     * Adds an OrdLock input to the transaction.
+     *
+     * @param params - Object containing input parameters
+     * @param params.kind - 'cancel' (wallet signature) or 'purchase' (outputs blob + preimage)
+     * @returns An InputBuilder for the new input
+     */
+  addOrdLockInput (params: AddOrdLockInputParams): InputBuilder {
+    // Validate parameters
+    if (!params.sourceTransaction || typeof params.sourceTransaction !== 'object') {
+      throw new Error('sourceTransaction is required and must be a Transaction object')
+    }
+    if (typeof params.sourceTransaction.id !== 'function') {
+      throw new Error('sourceTransaction must be a valid Transaction object with an id() method')
+    }
+    if (typeof params.sourceOutputIndex !== 'number' || params.sourceOutputIndex < 0) {
+      throw new Error('sourceOutputIndex must be a non-negative number')
+    }
+    if (params.description !== undefined && typeof params.description !== 'string') {
+      throw new Error('description must be a string')
+    }
+    if (params.kind !== undefined && params.kind !== 'cancel' && params.kind !== 'purchase') {
+      throw new Error("kind must be 'cancel' or 'purchase'")
+    }
+
+    const inputConfig: InputConfig = {
+      type: 'ordLock',
+      sourceTransaction: params.sourceTransaction,
+      sourceOutputIndex: params.sourceOutputIndex,
+      description: params.description,
+      kind: params.kind,
+      walletParams: params.walletParams,
+      signOutputs: params.signOutputs ?? 'all',
+      anyoneCanPay: params.anyoneCanPay ?? false,
+      sourceSatoshis: params.sourceSatoshis,
+      lockingScript: params.lockingScript
+    }
+
+    this.inputs.push(inputConfig)
+    return new InputBuilder(this, inputConfig)
+  }
+
+  /**
      * Adds an ordinalP2PKH input to the transaction.
      *
      * @param params - Object containing input parameters
@@ -612,6 +685,34 @@ export class TransactionBuilder {
       satoshis: params.satoshis,
       description: params.description,
       addressOrParams
+    }
+
+    this.outputs.push(outputConfig)
+    return new OutputBuilder(this, outputConfig)
+  }
+
+  /**
+     * Adds an OrdLock output to the transaction.
+     *
+     * @param params - OrdLock locking params plus `satoshis` for the locked output itself.
+     * @returns An OutputBuilder for configuring this output
+     */
+  addOrdLockOutput (params: AddOrdLockOutputParams): OutputBuilder {
+    // Validate parameters
+    if (typeof params.satoshis !== 'number' || params.satoshis < 0) {
+      throw new Error('satoshis must be a non-negative number')
+    }
+    if (params.description !== undefined && typeof params.description !== 'string') {
+      throw new Error('description must be a string')
+    }
+
+    const { satoshis, description, ...ordLockParams } = params
+
+    const outputConfig: OutputConfig = {
+      type: 'ordLock',
+      satoshis,
+      description,
+      ordLockParams
     }
 
     this.outputs.push(outputConfig)
@@ -779,6 +880,28 @@ export class TransactionBuilder {
           })
           break
         }
+        case 'ordLock': {
+          const ordLock = new OrdLock(this.wallet)
+          const walletParams = config.walletParams
+
+          if (config.kind === 'purchase') {
+            unlockingScriptTemplate = ordLock.purchaseUnlock({
+              sourceSatoshis: config.sourceSatoshis,
+              lockingScript: config.lockingScript
+            })
+          } else {
+            unlockingScriptTemplate = ordLock.cancelUnlock({
+              protocolID: walletParams?.protocolID,
+              keyID: walletParams?.keyID,
+              counterparty: walletParams?.counterparty,
+              signOutputs: config.signOutputs,
+              anyoneCanPay: config.anyoneCanPay,
+              sourceSatoshis: config.sourceSatoshis,
+              lockingScript: config.lockingScript
+            })
+          }
+          break
+        }
         case 'custom': {
           // Use the provided unlocking script template directly
           unlockingScriptTemplate = config.unlockingScriptTemplate
@@ -795,12 +918,10 @@ export class TransactionBuilder {
       // Get txid from source
       const txid = config.sourceTransaction.id('hex')
 
-      // Build action input config with unlockingScriptLength from template
-      const unlockingScriptLength = await unlockingScriptTemplate.estimateLength()
       const inputConfig = {
         outpoint: `${txid}.${config.sourceOutputIndex}`,
         inputDescription: config.description || 'Transaction input',
-        unlockingScriptLength
+        unlockingScriptLength: 0
       }
 
       // Build the input object for preimage transaction
@@ -897,6 +1018,11 @@ export class TransactionBuilder {
               metadata: config.metadata
             })
           }
+          break
+        }
+        case 'ordLock': {
+          const ordLock = new OrdLock(this.wallet)
+          lockingScript = await ordLock.lock(config.ordLockParams)
           break
         }
         case 'custom': {
@@ -1051,6 +1177,32 @@ export class TransactionBuilder {
           })
         }
       })
+
+      // Compute unlockingScriptLength values now that we have a full transaction context.
+      for (let i = 0; i < unlockingScriptTemplates.length; i++) {
+        const template = unlockingScriptTemplates[i]
+        const fn = template?.estimateLength
+        if (typeof fn !== 'function') {
+          throw new Error('unlockingScriptTemplate must have an estimateLength() method')
+        }
+
+        const argc = fn.length
+        let length: number
+        if (argc >= 2) {
+          length = await fn.call(template, preimageTx, i)
+        } else if (argc === 1) {
+          length = await fn.call(template, preimageTx)
+        } else {
+          length = await fn.call(template)
+        }
+
+        const inputConfig = this.inputs[i]
+        if (inputConfig?.type === 'ordLock' && inputConfig.kind === 'purchase') {
+          length += 68 // +34 per wallet change output (expect no more than 2)
+        }
+
+        actionInputsConfig[i].unlockingScriptLength = length
+      }
 
       // Calculate fee and sign preimage to get change amounts
       await preimageTx.fee(new SatoshisPerKilobyte(DEFAULT_SAT_PER_KB))

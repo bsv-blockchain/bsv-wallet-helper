@@ -16,9 +16,11 @@ export {
   type AddOrdinalP2PKHOutputWithWallet,
   type AddOrdinalP2PKHOutputWithAutoDerivation,
   type AddOrdinalP2PKHOutputParams,
+  type AddOrdLockOutputParams,
   type AddCustomOutputParams,
   // Input parameter types
   type AddP2PKHInputParams,
   type AddOrdinalP2PKHInputParams,
+  type AddOrdLockInputParams,
   type AddCustomInputParams
 } from './types'

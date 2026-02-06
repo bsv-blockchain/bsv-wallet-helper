@@ -131,3 +131,43 @@ export type OrdinalLockParams =
  * Parameters for OrdP2PKH unlock method (same as {@link P2PKHUnlockParams})
  */
 export type OrdinalUnlockParams = P2PKHUnlockParams
+
+/**
+ * Parameters for OrdLock lock method.
+ *
+ * This creates an OrdLock (order lock) locking script.
+ */
+export interface OrdLockLockParams {
+  ordAddress: string
+  payAddress: string
+  price: number
+  assetId: string
+  itemData?: Record<string, any>
+  metadata?: Record<string, any>
+}
+
+/**
+ * Unlock params for cancelling an OrdLock.
+ *
+ * Uses a wallet signature (BRC-29 pattern) + pubkey + OP_1.
+ */
+export interface OrdLockCancelUnlockParams extends P2PKHUnlockParams {
+  protocolID?: WalletProtocol
+  keyID?: string
+  counterparty?: WalletCounterparty
+}
+
+/**
+ * Unlock params for purchasing/spending an OrdLock.
+ *
+ * This unlock path does not require a wallet because the contract expects
+ * an outputs blob + preimage + OP_0.
+ */
+export interface OrdLockPurchaseUnlockParams {
+  sourceSatoshis?: number
+  lockingScript?: Script
+}
+
+export type OrdLockUnlockParams =
+  | ({ kind?: 'cancel' } & OrdLockCancelUnlockParams)
+  | ({ kind: 'purchase' } & OrdLockPurchaseUnlockParams)

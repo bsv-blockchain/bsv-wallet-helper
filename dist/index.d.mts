@@ -186,6 +186,44 @@ type OrdinalLockParams = OrdinalLockWithPubkeyhash | OrdinalLockWithPublicKey | 
  * Parameters for OrdP2PKH unlock method (same as {@link P2PKHUnlockParams})
  */
 type OrdinalUnlockParams = P2PKHUnlockParams;
+/**
+ * Parameters for OrdLock lock method.
+ *
+ * This creates an OrdLock (order lock) locking script.
+ */
+interface OrdLockLockParams {
+    ordAddress: string;
+    payAddress: string;
+    price: number;
+    assetId: string;
+    itemData?: Record<string, any>;
+    metadata?: Record<string, any>;
+}
+/**
+ * Unlock params for cancelling an OrdLock.
+ *
+ * Uses a wallet signature (BRC-29 pattern) + pubkey + OP_1.
+ */
+interface OrdLockCancelUnlockParams extends P2PKHUnlockParams {
+    protocolID?: WalletProtocol;
+    keyID?: string;
+    counterparty?: WalletCounterparty;
+}
+/**
+ * Unlock params for purchasing/spending an OrdLock.
+ *
+ * This unlock path does not require a wallet because the contract expects
+ * an outputs blob + preimage + OP_0.
+ */
+interface OrdLockPurchaseUnlockParams {
+    sourceSatoshis?: number;
+    lockingScript?: Script;
+}
+type OrdLockUnlockParams = ({
+    kind?: 'cancel';
+} & OrdLockCancelUnlockParams) | ({
+    kind: 'purchase';
+} & OrdLockPurchaseUnlockParams);
 
 /**
  * P2PKH (Pay To Public Key Hash) class implementing ScriptTemplate.
@@ -248,6 +286,65 @@ declare class P2PKH implements ScriptTemplate {
 }
 
 /**
+ * OrdLock (order lock) template.
+ *
+ * This template creates a locking script that:
+ * - Contains an Ordinal envelope ("ord") with an embedded BSV-20 transfer inscription
+ * - Encodes cancellation and payment terms into the contract portion
+ * - Optionally appends an OP_RETURN JSON payload for application metadata
+ */
+declare class OrdLock implements ScriptTemplate {
+    private readonly wallet?;
+    private readonly p2pkh;
+    /**
+     * Creates a new OrdLock instance.
+     *
+     * @param wallet - Optional wallet used for cancel unlocking (wallet signature)
+     */
+    constructor(wallet?: WalletInterface);
+    /**
+     * Creates an OrdLock locking script.
+     *
+     * The pay output script is produced using the existing WalletP2PKH template.
+     * Metadata is appended as OP_RETURN only when `metadata` or `itemData` contains fields.
+     */
+    lock(params: OrdLockLockParams): Promise<LockingScript>;
+    /**
+     * ScriptTemplate.unlock dispatcher.
+     *
+     * - Cancel path (default): wallet signature + pubkey + OP_1
+     * - Purchase path (`kind: 'purchase'`): outputs blob + preimage + OP_0
+     */
+    unlock(params?: OrdLockUnlockParams): {
+        sign: (tx: Transaction, inputIndex: number) => Promise<UnlockingScript>;
+        estimateLength: (tx: Transaction, inputIndex: number) => Promise<number>;
+    };
+    /**
+     * Cancel unlock.
+     *
+     * Unlocking script format:
+     * `<signature> <compressedPubKey> OP_1`
+     */
+    cancelUnlock(params?: OrdLockCancelUnlockParams): {
+        sign: (tx: Transaction, inputIndex: number) => Promise<UnlockingScript>;
+        estimateLength: () => Promise<108>;
+    };
+    /**
+     * Purchase unlock.
+     *
+     * Unlocking script format:
+     * `<outputsBlob> <preimage> OP_0`
+     *
+     * Note: the unlocking script size depends on final outputs, so `estimateLength`
+     * must be called with `(tx, inputIndex)`.
+     */
+    purchaseUnlock(params?: OrdLockPurchaseUnlockParams): {
+        sign: (tx: Transaction, inputIndex: number) => Promise<UnlockingScript>;
+        estimateLength: (tx: Transaction, inputIndex: number) => Promise<number>;
+    };
+}
+
+/**
  * Parameters for the build() method
  */
 interface BuildParams {
@@ -263,6 +360,17 @@ type InputConfig = {
     sourceTransaction: Transaction;
     sourceOutputIndex: number;
     description?: string;
+    walletParams?: WalletDerivationParams;
+    signOutputs?: 'all' | 'none' | 'single';
+    anyoneCanPay?: boolean;
+    sourceSatoshis?: number;
+    lockingScript?: Script;
+} | {
+    type: 'ordLock';
+    sourceTransaction: Transaction;
+    sourceOutputIndex: number;
+    description?: string;
+    kind?: 'cancel' | 'purchase';
     walletParams?: WalletDerivationParams;
     signOutputs?: 'all' | 'none' | 'single';
     anyoneCanPay?: boolean;
@@ -306,6 +414,14 @@ type OutputConfig = {
     addressOrParams?: string | WalletDerivationParams;
     inscription?: Inscription;
     metadata?: MAP$1;
+    opReturnFields?: Array<string | number[]>;
+    basket?: string;
+    customInstructions?: string;
+} | {
+    type: 'ordLock';
+    satoshis: number;
+    description?: string;
+    ordLockParams: OrdLockLockParams;
     opReturnFields?: Array<string | number[]>;
     basket?: string;
     customInstructions?: string;
@@ -480,6 +596,16 @@ interface AddOrdinalP2PKHOutputWithAutoDerivation {
  */
 type AddOrdinalP2PKHOutputParams = AddOrdinalP2PKHOutputWithPublicKey | AddOrdinalP2PKHOutputWithWallet | AddOrdinalP2PKHOutputWithAutoDerivation;
 /**
+ * Parameters for adding an OrdLock output.
+ *
+ * Note: `satoshis` is the satoshis locked in the OrdLock output itself (typically 1).
+ * `price` is the amount the contract expects to be paid to the seller when purchased.
+ */
+interface AddOrdLockOutputParams extends OrdLockLockParams {
+    satoshis: number;
+    description?: string;
+}
+/**
  * Parameters for adding a custom output with a specific locking script
  *
  * @property lockingScript - Custom locking script for this output
@@ -522,6 +648,23 @@ interface AddP2PKHInputParams {
     /** Optional amount in satoshis being unlocked (otherwise requires sourceTransaction) */
     sourceSatoshis?: number;
     /** Optional locking script being unlocked (otherwise requires sourceTransaction) */
+    lockingScript?: Script;
+}
+/**
+ * Parameters for adding an OrdLock input.
+ *
+ * Use `kind: 'cancel'` to unlock via wallet signature.
+ * Use `kind: 'purchase'` to unlock via outputs-blob + preimage.
+ */
+interface AddOrdLockInputParams {
+    sourceTransaction: Transaction;
+    sourceOutputIndex: number;
+    description?: string;
+    kind?: 'cancel' | 'purchase';
+    walletParams?: WalletDerivationParams;
+    signOutputs?: 'all' | 'none' | 'single';
+    anyoneCanPay?: boolean;
+    sourceSatoshis?: number;
     lockingScript?: Script;
 }
 /**
@@ -611,6 +754,13 @@ declare class InputBuilder {
        */
     addOrdinalP2PKHInput(params: AddOrdinalP2PKHInputParams): InputBuilder;
     /**
+       * Adds an OrdLock input to the transaction.
+       *
+       * @param params - Object containing input parameters
+       * @returns A new InputBuilder for the new input
+       */
+    addOrdLockInput(params: AddOrdLockInputParams): InputBuilder;
+    /**
        * Adds a custom input with a pre-built unlocking script template.
        *
        * @param params - Object containing input parameters
@@ -638,6 +788,13 @@ declare class InputBuilder {
        * @returns A new OutputBuilder for the new output
        */
     addOrdinalP2PKHOutput(params: AddOrdinalP2PKHOutputParams): OutputBuilder;
+    /**
+       * Adds an OrdLock output to the transaction.
+       *
+       * @param params - Object containing output parameters
+       * @returns A new OutputBuilder for configuring this output
+       */
+    addOrdLockOutput(params: AddOrdLockOutputParams): OutputBuilder;
     /**
        * Adds a custom output with a pre-built locking script.
        *
@@ -727,6 +884,7 @@ declare class OutputBuilder {
        * @returns A new InputBuilder for the new input
        */
     addOrdinalP2PKHInput(params: AddOrdinalP2PKHInputParams): InputBuilder;
+    addOrdLockInput(params: AddOrdLockInputParams): InputBuilder;
     /**
        * Adds a custom input with a pre-built unlocking script template.
        *
@@ -741,6 +899,7 @@ declare class OutputBuilder {
        * @returns A new OutputBuilder for the new output
        */
     addOrdinalP2PKHOutput(params: AddOrdinalP2PKHOutputParams): OutputBuilder;
+    addOrdLockOutput(params: AddOrdLockOutputParams): OutputBuilder;
     /**
        * Adds a custom output with a pre-built locking script.
        *
@@ -828,6 +987,14 @@ declare class TransactionBuilder {
        */
     addP2PKHInput(params: AddP2PKHInputParams): InputBuilder;
     /**
+       * Adds an OrdLock input to the transaction.
+       *
+       * @param params - Object containing input parameters
+       * @param params.kind - 'cancel' (wallet signature) or 'purchase' (outputs blob + preimage)
+       * @returns An InputBuilder for the new input
+       */
+    addOrdLockInput(params: AddOrdLockInputParams): InputBuilder;
+    /**
        * Adds an ordinalP2PKH input to the transaction.
        *
        * @param params - Object containing input parameters
@@ -862,6 +1029,13 @@ declare class TransactionBuilder {
        * @returns An OutputBuilder for configuring this output
        */
     addP2PKHOutput(params: AddP2PKHOutputParams): OutputBuilder;
+    /**
+       * Adds an OrdLock output to the transaction.
+       *
+       * @param params - OrdLock locking params plus `satoshis` for the locked output itself.
+       * @returns An OutputBuilder for configuring this output
+       */
+    addOrdLockOutput(params: AddOrdLockOutputParams): OutputBuilder;
     /**
        * Adds a change output to the transaction.
        *
@@ -1235,4 +1409,4 @@ declare function extractOpReturnData(script: LockingScript | Script): string[] |
  */
 declare function extractOpReturnData(hex: string): string[] | null;
 
-export { type AddChangeOutputParams, type AddChangeOutputWithAutoDerivation, type AddChangeOutputWithPublicKey, type AddChangeOutputWithWallet, type AddCustomInputParams, type AddCustomOutputParams, type AddOrdinalP2PKHInputParams, type AddOrdinalP2PKHOutputParams, type AddOrdinalP2PKHOutputWithAutoDerivation, type AddOrdinalP2PKHOutputWithPublicKey, type AddOrdinalP2PKHOutputWithWallet, type AddP2PKHInputParams, type AddP2PKHOutputParams, type AddP2PKHOutputWithAutoDerivation, type AddP2PKHOutputWithPublicKey, type AddP2PKHOutputWithWallet, type BuildParams, InputBuilder, type Inscription, type InscriptionData, type MAP$1 as MAP, type OrdinalLockParams, type OrdinalLockWithPubkeyhash, type OrdinalLockWithPublicKey, type OrdinalLockWithWallet, type OrdinalUnlockParams, OutputBuilder, type P2PKHLockParams, type P2PKHUnlockParams, type ScriptType, TransactionBuilder, type WalletDerivationParams, OrdP2PKH as WalletOrdP2PKH, P2PKH as WalletP2PKH, addOpReturnData, calculatePreimage, extractInscriptionData, extractMapMetadata, extractOpReturnData, getAddress, getDerivation, getScriptType, hasOpReturnData, hasOrd, isOrdinal, isP2PKH, makeWallet };
+export { type AddChangeOutputParams, type AddChangeOutputWithAutoDerivation, type AddChangeOutputWithPublicKey, type AddChangeOutputWithWallet, type AddCustomInputParams, type AddCustomOutputParams, type AddOrdLockInputParams, type AddOrdLockOutputParams, type AddOrdinalP2PKHInputParams, type AddOrdinalP2PKHOutputParams, type AddOrdinalP2PKHOutputWithAutoDerivation, type AddOrdinalP2PKHOutputWithPublicKey, type AddOrdinalP2PKHOutputWithWallet, type AddP2PKHInputParams, type AddP2PKHOutputParams, type AddP2PKHOutputWithAutoDerivation, type AddP2PKHOutputWithPublicKey, type AddP2PKHOutputWithWallet, type BuildParams, InputBuilder, type Inscription, type InscriptionData, type MAP$1 as MAP, type OrdLockCancelUnlockParams, type OrdLockLockParams, type OrdLockPurchaseUnlockParams, type OrdLockUnlockParams, type OrdinalLockParams, type OrdinalLockWithPubkeyhash, type OrdinalLockWithPublicKey, type OrdinalLockWithWallet, type OrdinalUnlockParams, OutputBuilder, type P2PKHLockParams, type P2PKHUnlockParams, type ScriptType, TransactionBuilder, type WalletDerivationParams, OrdLock as WalletOrdLock, OrdP2PKH as WalletOrdP2PKH, P2PKH as WalletP2PKH, addOpReturnData, calculatePreimage, extractInscriptionData, extractMapMetadata, extractOpReturnData, getAddress, getDerivation, getScriptType, hasOpReturnData, hasOrd, isOrdinal, isP2PKH, makeWallet };

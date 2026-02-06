@@ -12,12 +12,28 @@ import {
   MerklePath,
 } from '@bsv/sdk';
 import { TransactionBuilder } from '../transaction';
-import { makeWallet } from '../../utils/mockWallet';
 import P2PKH from '../../script-templates/p2pkh';
 import OrdP2PKH from '../../script-templates/ordinal';
 
 // Test storage URL for test wallets
 const storageURL = "https://store-us-1.bsvb.tech";
+
+const makeWallet = async (
+  _chain: 'test' | 'main',
+  _storageURL: string,
+  privateKeyHex: string
+): Promise<WalletInterface> => {
+  const privateKey = new PrivateKey(privateKeyHex, 'hex')
+
+  return {
+    // Most tests overwrite createAction with their own jest mocks.
+    createAction: jest.fn(),
+    signAction: jest.fn(),
+    getPublicKey: async () => ({
+      publicKey: privateKey.toPublicKey().toString()
+    })
+  } as unknown as WalletInterface
+}
 
 describe('TransactionTemplate', () => {
   describe('constructor and basic validation', () => {

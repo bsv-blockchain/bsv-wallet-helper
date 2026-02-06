@@ -2,6 +2,7 @@
 export {
   WalletP2PKH,
   WalletOrdP2PKH,
+  WalletOrdLock,
   type Inscription,
   type MAP,
   // Script template parameter types
@@ -11,7 +12,11 @@ export {
   type OrdinalLockWithPublicKey,
   type OrdinalLockWithWallet,
   type OrdinalLockParams,
-  type OrdinalUnlockParams
+  type OrdinalUnlockParams,
+  type OrdLockLockParams,
+  type OrdLockCancelUnlockParams,
+  type OrdLockPurchaseUnlockParams,
+  type OrdLockUnlockParams
 } from './script-templates/index.js'
 
 // Transaction Builder
@@ -33,10 +38,12 @@ export {
   type AddOrdinalP2PKHOutputWithWallet,
   type AddOrdinalP2PKHOutputWithAutoDerivation,
   type AddOrdinalP2PKHOutputParams,
+  type AddOrdLockOutputParams,
   type AddCustomOutputParams,
   // Transaction template parameter types - Inputs
   type AddP2PKHInputParams,
   type AddOrdinalP2PKHInputParams,
+  type AddOrdLockInputParams,
   type AddCustomInputParams
 } from './transaction-builder/index.js'
 

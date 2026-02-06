@@ -23,6 +23,7 @@ __export(index_exports, {
   InputBuilder: () => InputBuilder,
   OutputBuilder: () => OutputBuilder,
   TransactionBuilder: () => TransactionBuilder,
+  WalletOrdLock: () => OrdLock,
   WalletOrdP2PKH: () => OrdP2PKH,
   WalletP2PKH: () => P2PKH,
   addOpReturnData: () => addOpReturnData,
@@ -153,7 +154,8 @@ var P2PKH = class {
       const { publicKey } = await this.wallet.getPublicKey({
         protocolID,
         keyID,
-        counterparty
+        counterparty,
+        forSelf: counterparty === "anyone" ? true : false
       });
       const pubKeyToHash = import_sdk2.PublicKey.fromString(publicKey);
       data = pubKeyToHash.toHash();
@@ -229,7 +231,8 @@ var P2PKH = class {
         const { publicKey } = await wallet.getPublicKey({
           protocolID,
           keyID,
-          counterparty
+          counterparty,
+          forSelf: true
         });
         const rawSignature = import_sdk2.Signature.fromDER(signature, "hex");
         const sig = new import_sdk2.TransactionSignature(
@@ -360,11 +363,232 @@ var applyInscription = (lockingScript, inscription, metaData, withSeparator = fa
   return import_sdk3.LockingScript.fromASM(inscriptionAsm);
 };
 
+// src/script-templates/ordlock.ts
+var import_sdk4 = require("@bsv/sdk");
+var OLOCK_PREFIX = "2097dfd76851bf465e8f715593b217714858bbe9570ff3bd5e33840a34e20ff0262102ba79df5f8ae7604a9830f03c7933028186aede0675a16f025dc4f8be8eec0382201008ce7480da41702918d1ec8e6849ba32b4d65b1e40dc669c31a1e6306b266c0000";
+var OLOCK_SUFFIX = "615179547a75537a537a537a0079537a75527a527a7575615579008763567901c161517957795779210ac407f0e4bd44bfc207355a778b046225a7068fc59ee7eda43ad905aadbffc800206c266b30e6a1319c66dc401e5bd6b432ba49688eecd118297041da8074ce081059795679615679aa0079610079517f517f517f517f517f517f517f517f517f517f517f517f517f517f517f517f517f517f517f517f517f517f517f517f517f517f517f517f517f517f517f7c7e7c7e7c7e7c7e7c7e7c7e7c7e7c7e7c7e7c7e7c7e7c7e7c7e7c7e7c7e7c7e7c7e7c7e7c7e7c7e7c7e7c7e7c7e7c7e7c7e7c7e7c7e7c7e7c7e7c7e7c7e01007e81517a75615779567956795679567961537956795479577995939521414136d08c5ed2bf3ba048afe6dcaebafeffffffffffffffffffffffffffffff00517951796151795179970079009f63007952799367007968517a75517a75517a7561527a75517a517951795296a0630079527994527a75517a6853798277527982775379012080517f517f517f517f517f517f517f517f517f517f517f517f517f517f517f517f517f517f517f517f517f517f517f517f517f517f517f517f517f517f517f7c7e7c7e7c7e7c7e7c7e7c7e7c7e7c7e7c7e7c7e7c7e7c7e7c7e7c7e7c7e7c7e7c7e7c7e7c7e7c7e7c7e7c7e7c7e7c7e7c7e7c7e7c7e7c7e7c7e7c7e7c7e01205279947f7754537993527993013051797e527e54797e58797e527e53797e52797e57797e0079517a75517a75517a75517a75517a75517a75517a75517a75517a75517a75517a75517a75517a756100795779ac517a75517a75517a75517a75517a75517a75517a75517a75517a7561517a75517a756169587951797e58797eaa577961007982775179517958947f7551790128947f77517a75517a75618777777777777777777767557951876351795779a9876957795779ac777777777777777767006868";
+var toHex2 = (str) => {
+  return import_sdk4.Utils.toHex(import_sdk4.Utils.toArray(str));
+};
+function validateLockParams(params) {
+  if (!params || typeof params !== "object") {
+    throw new Error("params is required");
+  }
+  if (!params.ordAddress || typeof params.ordAddress !== "string") {
+    throw new Error("ordAddress is required and must be a string");
+  }
+  if (!params.payAddress || typeof params.payAddress !== "string") {
+    throw new Error("payAddress is required and must be a string");
+  }
+  if (!Number.isSafeInteger(params.price) || params.price < 1) {
+    throw new Error("price is required and must be an integer greater than 0");
+  }
+  if (!params.assetId || typeof params.assetId !== "string") {
+    throw new Error("assetId is required and must be a string");
+  }
+  if (params.metadata !== void 0 && (params.metadata == null || typeof params.metadata !== "object" || Array.isArray(params.metadata))) {
+    throw new Error("metadata must be an object");
+  }
+  if (params.itemData !== void 0 && (params.itemData == null || typeof params.itemData !== "object" || Array.isArray(params.itemData))) {
+    throw new Error("itemData must be an object");
+  }
+}
+function buildOutput(satoshis, script) {
+  const writer = new import_sdk4.Utils.Writer();
+  writer.writeUInt64LEBn(new import_sdk4.BigNumber(satoshis));
+  writer.writeVarIntNum(script.length);
+  writer.write(script);
+  return writer.toArray();
+}
+var OrdLock = class {
+  /**
+   * Creates a new OrdLock instance.
+   *
+   * @param wallet - Optional wallet used for cancel unlocking (wallet signature)
+   */
+  constructor(wallet) {
+    this.wallet = wallet;
+    this.p2pkh = new P2PKH(wallet);
+  }
+  /**
+   * Creates an OrdLock locking script.
+   *
+   * The pay output script is produced using the existing WalletP2PKH template.
+   * Metadata is appended as OP_RETURN only when `metadata` or `itemData` contains fields.
+   */
+  async lock(params) {
+    validateLockParams(params);
+    const cancelPkh = import_sdk4.Utils.fromBase58Check(params.ordAddress).data;
+    const payPkh = import_sdk4.Utils.fromBase58Check(params.payAddress).data;
+    const inscription = {
+      p: "bsv-20",
+      op: "transfer",
+      amt: 1,
+      id: params.assetId
+    };
+    const combinedMetadata = {
+      ...params.metadata ?? {},
+      ...params.itemData ?? {}
+    };
+    const inscriptionJsonHex = toHex2(JSON.stringify(inscription));
+    const prefixAsm = import_sdk4.Script.fromHex(OLOCK_PREFIX).toASM();
+    const suffixAsm = import_sdk4.Script.fromHex(OLOCK_SUFFIX).toASM();
+    const payLockingScript = await this.p2pkh.lock({ pubkeyhash: payPkh });
+    const payOutputBytes = buildOutput(params.price, payLockingScript.toBinary());
+    const payOutputHex = import_sdk4.Utils.toHex(payOutputBytes);
+    const cancelPkhHex = import_sdk4.Utils.toHex(cancelPkh);
+    const contentTypeHex = toHex2("application/bsv-20");
+    const asmParts = [
+      "OP_0",
+      "OP_IF",
+      toHex2("ord"),
+      "OP_1",
+      contentTypeHex,
+      "OP_0",
+      inscriptionJsonHex,
+      "OP_ENDIF",
+      prefixAsm,
+      cancelPkhHex,
+      payOutputHex,
+      suffixAsm
+    ];
+    if (Object.keys(combinedMetadata).length > 0) {
+      const metadataJsonHex = toHex2(JSON.stringify(combinedMetadata));
+      asmParts.push("OP_RETURN", metadataJsonHex);
+    }
+    const asm = asmParts.join(" ");
+    return import_sdk4.LockingScript.fromASM(asm);
+  }
+  /**
+   * ScriptTemplate.unlock dispatcher.
+   *
+   * - Cancel path (default): wallet signature + pubkey + OP_1
+   * - Purchase path (`kind: 'purchase'`): outputs blob + preimage + OP_0
+   */
+  unlock(params) {
+    if (params && params.kind === "purchase") {
+      return this.purchaseUnlock(params);
+    }
+    return this.cancelUnlock(params);
+  }
+  /**
+   * Cancel unlock.
+   *
+   * Unlocking script format:
+   * `<signature> <compressedPubKey> OP_1`
+   */
+  cancelUnlock(params) {
+    if (this.wallet == null) {
+      throw new Error("Wallet is required for unlocking");
+    }
+    const protocolID = params?.protocolID ?? [0, "ordlock"];
+    const keyID = params?.keyID ?? "0";
+    const counterparty = params?.counterparty ?? "self";
+    const signOutputs = params?.signOutputs ?? "all";
+    const anyoneCanPay = params?.anyoneCanPay ?? false;
+    const sourceSatoshis = params?.sourceSatoshis;
+    const lockingScript = params?.lockingScript;
+    const wallet = this.wallet;
+    return {
+      sign: async (tx, inputIndex) => {
+        const { preimage, signatureScope } = calculatePreimage(
+          tx,
+          inputIndex,
+          signOutputs,
+          anyoneCanPay,
+          sourceSatoshis,
+          lockingScript
+        );
+        const { signature } = await wallet.createSignature({
+          hashToDirectlySign: import_sdk4.Hash.hash256(preimage),
+          protocolID,
+          keyID,
+          counterparty
+        });
+        const { publicKey } = await wallet.getPublicKey({
+          protocolID,
+          keyID,
+          counterparty,
+          forSelf: true
+        });
+        const rawSignature = import_sdk4.Signature.fromDER(signature, "hex");
+        const sig = new import_sdk4.TransactionSignature(
+          rawSignature.r,
+          rawSignature.s,
+          signatureScope
+        );
+        const sigForScript = sig.toChecksigFormat();
+        const pubkeyForScript = import_sdk4.PublicKey.fromString(publicKey).encode(true);
+        const unlockScript = new import_sdk4.UnlockingScript();
+        unlockScript.writeBin(sigForScript);
+        unlockScript.writeBin(pubkeyForScript);
+        unlockScript.writeOpCode(import_sdk4.OP.OP_1);
+        return unlockScript;
+      },
+      estimateLength: async () => 108
+    };
+  }
+  /**
+   * Purchase unlock.
+   *
+   * Unlocking script format:
+   * `<outputsBlob> <preimage> OP_0`
+   *
+   * Note: the unlocking script size depends on final outputs, so `estimateLength`
+   * must be called with `(tx, inputIndex)`.
+   */
+  purchaseUnlock(params) {
+    const sourceSatoshis = params?.sourceSatoshis;
+    const lockingScript = params?.lockingScript;
+    const purchase = {
+      sign: async (tx, inputIndex) => {
+        if (tx.outputs.length < 2) {
+          throw new Error("Malformed transaction");
+        }
+        const output0 = buildOutput(
+          tx.outputs[0].satoshis || 0,
+          tx.outputs[0].lockingScript.toBinary()
+        );
+        let otherOutputs;
+        if (tx.outputs.length > 2) {
+          const writer = new import_sdk4.Utils.Writer();
+          for (const output of tx.outputs.slice(2)) {
+            writer.write(buildOutput(output.satoshis || 0, output.lockingScript.toBinary()));
+          }
+          otherOutputs = writer.toArray();
+        }
+        const { preimage } = calculatePreimage(
+          tx,
+          inputIndex,
+          "all",
+          true,
+          sourceSatoshis,
+          lockingScript
+        );
+        const unlockingScript = new import_sdk4.UnlockingScript();
+        unlockingScript.writeBin(output0);
+        if (otherOutputs != null && otherOutputs.length > 0) {
+          unlockingScript.writeBin(otherOutputs);
+        } else {
+          unlockingScript.writeOpCode(import_sdk4.OP.OP_0);
+        }
+        unlockingScript.writeBin(preimage);
+        unlockingScript.writeOpCode(import_sdk4.OP.OP_0);
+        return unlockingScript;
+      },
+      estimateLength: async (tx, inputIndex) => {
+        return (await purchase.sign(tx, inputIndex)).toBinary().length;
+      }
+    };
+    return purchase;
+  }
+};
+
 // src/transaction-builder/transaction.ts
-var import_sdk8 = require("@bsv/sdk");
+var import_sdk9 = require("@bsv/sdk");
 
 // src/utils/mockWallet.ts
-var import_sdk4 = require("@bsv/sdk");
+var import_sdk5 = require("@bsv/sdk");
 var import_wallet_toolbox_client = require("@bsv/wallet-toolbox-client");
 async function makeWallet(chain, storageURL, privateKey) {
   if (!chain) {
@@ -380,7 +604,7 @@ async function makeWallet(chain, storageURL, privateKey) {
     throw new Error("privateKey parameter is required");
   }
   try {
-    const keyDeriver = new import_sdk4.KeyDeriver(new import_sdk4.PrivateKey(privateKey, "hex"));
+    const keyDeriver = new import_sdk5.KeyDeriver(new import_sdk5.PrivateKey(privateKey, "hex"));
     const storageManager = new import_wallet_toolbox_client.WalletStorageManager(keyDeriver.identityKey);
     const signer = new import_wallet_toolbox_client.WalletSigner(chain, keyDeriver, storageManager);
     const services = new import_wallet_toolbox_client.Services(chain);
@@ -398,7 +622,7 @@ async function makeWallet(chain, storageURL, privateKey) {
 }
 
 // src/utils/opreturn.ts
-var import_sdk5 = require("@bsv/sdk");
+var import_sdk6 = require("@bsv/sdk");
 var isHex = (str) => {
   if (str.length === 0) return true;
   if (str.length % 2 !== 0) return false;
@@ -406,12 +630,12 @@ var isHex = (str) => {
 };
 var toHexField = (field) => {
   if (Array.isArray(field)) {
-    return import_sdk5.Utils.toHex(field);
+    return import_sdk6.Utils.toHex(field);
   }
   if (isHex(field)) {
     return field.toLowerCase();
   }
-  return import_sdk5.Utils.toHex(import_sdk5.Utils.toArray(field));
+  return import_sdk6.Utils.toHex(import_sdk6.Utils.toArray(field));
 };
 var addOpReturnData = (script, fields) => {
   if (!script || typeof script.toASM !== "function") {
@@ -451,21 +675,21 @@ var addOpReturnData = (script, fields) => {
   const baseAsm = script.toASM();
   const dataFieldsAsm = hexFields.join(" ");
   const fullAsm = `${baseAsm} OP_RETURN ${dataFieldsAsm}`;
-  return import_sdk5.LockingScript.fromASM(fullAsm);
+  return import_sdk6.LockingScript.fromASM(fullAsm);
 };
 
 // src/utils/derivation.ts
 var import_wallet_toolbox_client2 = require("@bsv/wallet-toolbox-client");
-var import_sdk6 = require("@bsv/sdk");
+var import_sdk7 = require("@bsv/sdk");
 function getDerivation() {
-  const derivationPrefix = import_sdk6.Utils.toBase64((0, import_sdk6.Random)(8));
-  const derivationSuffix = import_sdk6.Utils.toBase64((0, import_sdk6.Random)(8));
+  const derivationPrefix = import_sdk7.Utils.toBase64((0, import_sdk7.Random)(8));
+  const derivationSuffix = import_sdk7.Utils.toBase64((0, import_sdk7.Random)(8));
   return {
     protocolID: import_wallet_toolbox_client2.brc29ProtocolID,
     keyID: derivationPrefix + " " + derivationSuffix
   };
 }
-async function getAddress(wallet, amount = 1, counterparty = "self") {
+async function getAddress(wallet, amount = 1, counterparty = "anyone") {
   if (!wallet) {
     throw new Error("Wallet is required");
   }
@@ -480,7 +704,7 @@ async function getAddress(wallet, amount = 1, counterparty = "self") {
         keyID: derivation.keyID,
         counterparty
       });
-      const address = import_sdk6.PublicKey.fromString(publicKey).toAddress();
+      const address = import_sdk7.PublicKey.fromString(publicKey).toAddress();
       return {
         address,
         walletParams: {
@@ -499,7 +723,7 @@ async function getAddress(wallet, amount = 1, counterparty = "self") {
 }
 
 // src/utils/scriptValidation.ts
-var import_sdk7 = require("@bsv/sdk");
+var import_sdk8 = require("@bsv/sdk");
 var SCRIPT_TEMPLATES = {
   p2pkh: {
     // OP_DUP OP_HASH160 [20 bytes] OP_EQUALVERIFY OP_CHECKSIG
@@ -599,7 +823,7 @@ function hasOpReturnData(input) {
   try {
     if (typeof input === "string") {
       try {
-        const script = import_sdk7.Script.fromHex(input);
+        const script = import_sdk8.Script.fromHex(input);
         const asm = script.toASM();
         if (asm.includes("OP_RETURN")) {
           return true;
@@ -647,7 +871,7 @@ function getScriptType(input) {
 }
 function extractInscriptionData(input) {
   validateInput(input, "extractInscriptionData");
-  const script = typeof input === "string" ? import_sdk7.Script.fromHex(input) : input;
+  const script = typeof input === "string" ? import_sdk8.Script.fromHex(input) : input;
   const chunks = script.chunks;
   if (typeof input === "string" ? !hasOrd(input) : !hasOrd(input)) {
     return null;
@@ -664,7 +888,7 @@ function extractInscriptionData(input) {
       throw new Error("extractInscriptionData: Missing content type data at chunk 6");
     }
     try {
-      contentType = import_sdk7.Utils.toUTF8(contentTypeChunk.data);
+      contentType = import_sdk8.Utils.toUTF8(contentTypeChunk.data);
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
       throw new Error(`extractInscriptionData: Invalid UTF-8 in content type: ${message}`);
@@ -694,7 +918,7 @@ function extractMapMetadata(input) {
   if (typeof input === "string" ? !hasOpReturnData(input) : !hasOpReturnData(input)) {
     return null;
   }
-  const script = typeof input === "string" ? import_sdk7.Script.fromHex(input) : input;
+  const script = typeof input === "string" ? import_sdk8.Script.fromHex(input) : input;
   const chunks = script.chunks;
   const opReturnIndex = chunks.findIndex((chunk) => chunk.op === 106);
   if (opReturnIndex === -1) {
@@ -706,7 +930,7 @@ function extractMapMetadata(input) {
   }
   let prefix;
   try {
-    prefix = import_sdk7.Utils.toUTF8(prefixChunk.data);
+    prefix = import_sdk8.Utils.toUTF8(prefixChunk.data);
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
     throw new Error(`extractMapMetadata: Invalid UTF-8 in MAP prefix: ${message}`);
@@ -720,7 +944,7 @@ function extractMapMetadata(input) {
   }
   let cmd;
   try {
-    cmd = import_sdk7.Utils.toUTF8(cmdChunk.data);
+    cmd = import_sdk8.Utils.toUTF8(cmdChunk.data);
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
     throw new Error(`extractMapMetadata: Invalid UTF-8 in command: ${message}`);
@@ -737,8 +961,8 @@ function extractMapMetadata(input) {
       break;
     }
     try {
-      const key = import_sdk7.Utils.toUTF8(keyChunk.data);
-      const value = import_sdk7.Utils.toUTF8(valueChunk.data);
+      const key = import_sdk8.Utils.toUTF8(keyChunk.data);
+      const value = import_sdk8.Utils.toUTF8(valueChunk.data);
       metadata[key] = value;
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
@@ -756,7 +980,7 @@ function extractOpReturnData(input) {
   if (typeof input === "string" ? !hasOpReturnData(input) : !hasOpReturnData(input)) {
     return null;
   }
-  const script = typeof input === "string" ? import_sdk7.Script.fromHex(input) : input;
+  const script = typeof input === "string" ? import_sdk8.Script.fromHex(input) : input;
   const chunks = script.chunks;
   const opReturnIndex = chunks.findIndex((chunk) => chunk.op === 106);
   if (opReturnIndex === -1) {
@@ -766,7 +990,7 @@ function extractOpReturnData(input) {
   for (let i = opReturnIndex + 1; i < chunks.length; i++) {
     const chunk = chunks[i];
     if (chunk.data != null && chunk.data.length > 0) {
-      dataFields.push(import_sdk7.Utils.toBase64(chunk.data));
+      dataFields.push(import_sdk8.Utils.toBase64(chunk.data));
     }
   }
   return dataFields.length > 0 ? dataFields : null;
@@ -815,6 +1039,15 @@ var InputBuilder = class {
     return this.parent.addOrdinalP2PKHInput(params);
   }
   /**
+     * Adds an OrdLock input to the transaction.
+     *
+     * @param params - Object containing input parameters
+     * @returns A new InputBuilder for the new input
+     */
+  addOrdLockInput(params) {
+    return this.parent.addOrdLockInput(params);
+  }
+  /**
      * Adds a custom input with a pre-built unlocking script template.
      *
      * @param params - Object containing input parameters
@@ -849,6 +1082,15 @@ var InputBuilder = class {
      */
   addOrdinalP2PKHOutput(params) {
     return this.parent.addOrdinalP2PKHOutput(params);
+  }
+  /**
+     * Adds an OrdLock output to the transaction.
+     *
+     * @param params - Object containing output parameters
+     * @returns A new OutputBuilder for configuring this output
+     */
+  addOrdLockOutput(params) {
+    return this.parent.addOrdLockOutput(params);
   }
   /**
      * Adds a custom output with a pre-built locking script.
@@ -967,6 +1209,9 @@ var OutputBuilder = class {
   addOrdinalP2PKHInput(params) {
     return this.parent.addOrdinalP2PKHInput(params);
   }
+  addOrdLockInput(params) {
+    return this.parent.addOrdLockInput(params);
+  }
   /**
      * Adds a custom input with a pre-built unlocking script template.
      *
@@ -984,6 +1229,9 @@ var OutputBuilder = class {
      */
   addOrdinalP2PKHOutput(params) {
     return this.parent.addOrdinalP2PKHOutput(params);
+  }
+  addOrdLockOutput(params) {
+    return this.parent.addOrdLockOutput(params);
   }
   /**
      * Adds a custom output with a pre-built locking script.
@@ -1171,6 +1419,44 @@ var TransactionBuilder = class {
     return new InputBuilder(this, inputConfig);
   }
   /**
+     * Adds an OrdLock input to the transaction.
+     *
+     * @param params - Object containing input parameters
+     * @param params.kind - 'cancel' (wallet signature) or 'purchase' (outputs blob + preimage)
+     * @returns An InputBuilder for the new input
+     */
+  addOrdLockInput(params) {
+    if (!params.sourceTransaction || typeof params.sourceTransaction !== "object") {
+      throw new Error("sourceTransaction is required and must be a Transaction object");
+    }
+    if (typeof params.sourceTransaction.id !== "function") {
+      throw new Error("sourceTransaction must be a valid Transaction object with an id() method");
+    }
+    if (typeof params.sourceOutputIndex !== "number" || params.sourceOutputIndex < 0) {
+      throw new Error("sourceOutputIndex must be a non-negative number");
+    }
+    if (params.description !== void 0 && typeof params.description !== "string") {
+      throw new Error("description must be a string");
+    }
+    if (params.kind !== void 0 && params.kind !== "cancel" && params.kind !== "purchase") {
+      throw new Error("kind must be 'cancel' or 'purchase'");
+    }
+    const inputConfig = {
+      type: "ordLock",
+      sourceTransaction: params.sourceTransaction,
+      sourceOutputIndex: params.sourceOutputIndex,
+      description: params.description,
+      kind: params.kind,
+      walletParams: params.walletParams,
+      signOutputs: params.signOutputs ?? "all",
+      anyoneCanPay: params.anyoneCanPay ?? false,
+      sourceSatoshis: params.sourceSatoshis,
+      lockingScript: params.lockingScript
+    };
+    this.inputs.push(inputConfig);
+    return new InputBuilder(this, inputConfig);
+  }
+  /**
      * Adds an ordinalP2PKH input to the transaction.
      *
      * @param params - Object containing input parameters
@@ -1278,6 +1564,29 @@ var TransactionBuilder = class {
       satoshis: params.satoshis,
       description: params.description,
       addressOrParams
+    };
+    this.outputs.push(outputConfig);
+    return new OutputBuilder(this, outputConfig);
+  }
+  /**
+     * Adds an OrdLock output to the transaction.
+     *
+     * @param params - OrdLock locking params plus `satoshis` for the locked output itself.
+     * @returns An OutputBuilder for configuring this output
+     */
+  addOrdLockOutput(params) {
+    if (typeof params.satoshis !== "number" || params.satoshis < 0) {
+      throw new Error("satoshis must be a non-negative number");
+    }
+    if (params.description !== void 0 && typeof params.description !== "string") {
+      throw new Error("description must be a string");
+    }
+    const { satoshis, description, ...ordLockParams } = params;
+    const outputConfig = {
+      type: "ordLock",
+      satoshis,
+      description,
+      ordLockParams
     };
     this.outputs.push(outputConfig);
     return new OutputBuilder(this, outputConfig);
@@ -1404,6 +1713,27 @@ var TransactionBuilder = class {
           });
           break;
         }
+        case "ordLock": {
+          const ordLock = new OrdLock(this.wallet);
+          const walletParams = config.walletParams;
+          if (config.kind === "purchase") {
+            unlockingScriptTemplate = ordLock.purchaseUnlock({
+              sourceSatoshis: config.sourceSatoshis,
+              lockingScript: config.lockingScript
+            });
+          } else {
+            unlockingScriptTemplate = ordLock.cancelUnlock({
+              protocolID: walletParams?.protocolID,
+              keyID: walletParams?.keyID,
+              counterparty: walletParams?.counterparty,
+              signOutputs: config.signOutputs,
+              anyoneCanPay: config.anyoneCanPay,
+              sourceSatoshis: config.sourceSatoshis,
+              lockingScript: config.lockingScript
+            });
+          }
+          break;
+        }
         case "custom": {
           unlockingScriptTemplate = config.unlockingScriptTemplate;
           break;
@@ -1414,11 +1744,10 @@ var TransactionBuilder = class {
       }
       unlockingScriptTemplates.push(unlockingScriptTemplate);
       const txid = config.sourceTransaction.id("hex");
-      const unlockingScriptLength = await unlockingScriptTemplate.estimateLength();
       const inputConfig = {
         outpoint: `${txid}.${config.sourceOutputIndex}`,
         inputDescription: config.description || "Transaction input",
-        unlockingScriptLength
+        unlockingScriptLength: 0
       };
       const inputForPreimage = {
         sourceTransaction: config.sourceTransaction,
@@ -1488,6 +1817,11 @@ var TransactionBuilder = class {
               metadata: config.metadata
             });
           }
+          break;
+        }
+        case "ordLock": {
+          const ordLock = new OrdLock(this.wallet);
+          lockingScript = await ordLock.lock(config.ordLockParams);
           break;
         }
         case "custom": {
@@ -1586,7 +1920,7 @@ var TransactionBuilder = class {
     };
     let inputBEEF;
     if (preimageInputs.length > 0) {
-      const preimageTx = new import_sdk8.Transaction();
+      const preimageTx = new import_sdk9.Transaction();
       preimageInputs.forEach((input) => {
         preimageTx.addInput(input);
       });
@@ -1603,7 +1937,28 @@ var TransactionBuilder = class {
           });
         }
       });
-      await preimageTx.fee(new import_sdk8.SatoshisPerKilobyte(DEFAULT_SAT_PER_KB));
+      for (let i = 0; i < unlockingScriptTemplates.length; i++) {
+        const template = unlockingScriptTemplates[i];
+        const fn = template?.estimateLength;
+        if (typeof fn !== "function") {
+          throw new Error("unlockingScriptTemplate must have an estimateLength() method");
+        }
+        const argc = fn.length;
+        let length;
+        if (argc >= 2) {
+          length = await fn.call(template, preimageTx, i);
+        } else if (argc === 1) {
+          length = await fn.call(template, preimageTx);
+        } else {
+          length = await fn.call(template);
+        }
+        const inputConfig = this.inputs[i];
+        if (inputConfig?.type === "ordLock" && inputConfig.kind === "purchase") {
+          length += 68;
+        }
+        actionInputsConfig[i].unlockingScriptLength = length;
+      }
+      await preimageTx.fee(new import_sdk9.SatoshisPerKilobyte(DEFAULT_SAT_PER_KB));
       await preimageTx.sign();
       const outputIndicesToRemove = [];
       for (let i = 0; i < this.outputs.length; i++) {
@@ -1627,7 +1982,7 @@ var TransactionBuilder = class {
       if (preimageInputs.length === 1) {
         inputBEEF = preimageInputs[0].sourceTransaction.toBEEF();
       } else {
-        const mergedBeef = new import_sdk8.Beef();
+        const mergedBeef = new import_sdk9.Beef();
         preimageInputs.forEach((input) => {
           const beef = input.sourceTransaction.toBEEF();
           mergedBeef.mergeBeef(beef);
@@ -1656,7 +2011,7 @@ var TransactionBuilder = class {
       throw new Error("Failed to create signable transaction");
     }
     const reference = actionRes.signableTransaction.reference;
-    const txToSign = import_sdk8.Transaction.fromBEEF(actionRes.signableTransaction.tx);
+    const txToSign = import_sdk9.Transaction.fromBEEF(actionRes.signableTransaction.tx);
     for (let i = 0; i < this.inputs.length; i++) {
       const config = this.inputs[i];
       txToSign.inputs[i].unlockingScriptTemplate = unlockingScriptTemplates[i];
@@ -1695,6 +2050,7 @@ var TransactionBuilder = class {
   InputBuilder,
   OutputBuilder,
   TransactionBuilder,
+  WalletOrdLock,
   WalletOrdP2PKH,
   WalletP2PKH,
   addOpReturnData,

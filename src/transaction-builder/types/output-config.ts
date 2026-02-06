@@ -1,6 +1,7 @@
 import { LockingScript } from '@bsv/sdk'
 import { WalletDerivationParams } from '../../types/wallet'
 import { Inscription, MAP } from '../../script-templates/ordinal'
+import { OrdLockLockParams } from '../../script-templates/types'
 
 /**
  * Configuration for a transaction output
@@ -22,6 +23,15 @@ export type OutputConfig =
       addressOrParams?: string | WalletDerivationParams // Optional - uses BRC-29 derivation if not provided
       inscription?: Inscription
       metadata?: MAP
+      opReturnFields?: Array<string | number[]>
+      basket?: string
+      customInstructions?: string
+    }
+    | {
+      type: 'ordLock'
+      satoshis: number
+      description?: string
+      ordLockParams: OrdLockLockParams
       opReturnFields?: Array<string | number[]>
       basket?: string
       customInstructions?: string

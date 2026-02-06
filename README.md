@@ -139,6 +139,42 @@ const lockingScript = await ordP2pkh.lock({
 });
 ```
 
+#### `WalletOrdLock`
+
+Wallet-compatible marketplace listing template for ordinals.
+
+An OrdLock output represents a listing with two spend paths:
+- **Cancel** (seller): seller cancels their own listing using a wallet signature.
+- **Purchase** (buyer): buyer purchases the listing; the unlocking script commits to the final transaction outputs.
+
+Most applications should use the `TransactionBuilder` helpers:
+
+```typescript
+import { TransactionBuilder } from '@bsv/wallet-helper'
+
+// Create listing
+await new TransactionBuilder(sellerWallet, 'Create listing')
+  .addOrdLockOutput({
+    ordAddress: sellerAddress,
+    payAddress: sellerAddress,
+    price: 1000,
+    assetId: 'my-asset-1',
+    satoshis: 1
+  })
+  .options({ randomizeOutputs: false })
+  .build()
+
+// Purchase listing (output ordering matters; see docs)
+await new TransactionBuilder(buyerWallet, 'Purchase listing')
+  .addOrdLockInput({ sourceTransaction: listingTx, sourceOutputIndex: 0, kind: 'purchase' })
+  .addP2PKHOutput({ publicKey: buyerPubKey, satoshis: 1 })     // Output 0: ordinal to buyer
+  .addP2PKHOutput({ publicKey: sellerPubKey, satoshis: 1000 }) // Output 1: payment to seller
+  .options({ randomizeOutputs: false })
+  .build()
+```
+
+📖 See the OrdLock section in **[TransactionBuilder documentation](./docs/Transaction-builder.md)** for the mechanics and required output ordering.
+
 **Note:** For wallet compatible multisig scripts see 'https://github.com/bsv-blockchain/ts-templates'.
 
 ### Types

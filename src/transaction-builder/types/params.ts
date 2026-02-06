@@ -1,6 +1,7 @@
 import { Transaction, LockingScript, Script } from '@bsv/sdk'
 import { WalletDerivationParams } from '../../types/wallet'
 import { Inscription, MAP } from '../../script-templates/ordinal'
+import { OrdLockLockParams } from '../../script-templates/types'
 
 // ============================================================================
 // OUTPUT PARAMETER TYPES
@@ -180,6 +181,17 @@ export type AddOrdinalP2PKHOutputParams =
     | AddOrdinalP2PKHOutputWithAutoDerivation
 
 /**
+ * Parameters for adding an OrdLock output.
+ *
+ * Note: `satoshis` is the satoshis locked in the OrdLock output itself (typically 1).
+ * `price` is the amount the contract expects to be paid to the seller when purchased.
+ */
+export interface AddOrdLockOutputParams extends OrdLockLockParams {
+  satoshis: number
+  description?: string
+}
+
+/**
  * Parameters for adding a custom output with a specific locking script
  *
  * @property lockingScript - Custom locking script for this output
@@ -227,6 +239,24 @@ export interface AddP2PKHInputParams {
   /** Optional amount in satoshis being unlocked (otherwise requires sourceTransaction) */
   sourceSatoshis?: number
   /** Optional locking script being unlocked (otherwise requires sourceTransaction) */
+  lockingScript?: Script
+}
+
+/**
+ * Parameters for adding an OrdLock input.
+ *
+ * Use `kind: 'cancel'` to unlock via wallet signature.
+ * Use `kind: 'purchase'` to unlock via outputs-blob + preimage.
+ */
+export interface AddOrdLockInputParams {
+  sourceTransaction: Transaction
+  sourceOutputIndex: number
+  description?: string
+  kind?: 'cancel' | 'purchase'
+  walletParams?: WalletDerivationParams
+  signOutputs?: 'all' | 'none' | 'single'
+  anyoneCanPay?: boolean
+  sourceSatoshis?: number
   lockingScript?: Script
 }
 
