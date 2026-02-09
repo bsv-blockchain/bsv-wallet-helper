@@ -11,7 +11,7 @@ import {
   Script,
   MerklePath,
 } from '@bsv/sdk';
-import { TransactionBuilder } from '../transaction';
+import { TransactionBuilder, isHexPublicKey } from '../transaction';
 import P2PKH from '../../script-templates/p2pkh';
 import OrdP2PKH from '../../script-templates/ordinal';
 
@@ -92,6 +92,26 @@ describe('TransactionTemplate', () => {
       expect(outputs[0].addressOrParams).toBe(publicKey);
     });
 
+    test('should add a P2PKH output with address string', async () => {
+      const privateKey = new PrivateKey(9);
+      const wallet = await makeWallet('test', storageURL, privateKey.toHex());
+
+      const address = '1BoatSLRHtKNngkdXEeobR76b53LETtpyT'
+
+      const template = new TransactionBuilder(wallet)
+        .addP2PKHOutput({ address, satoshis: 1000, description: 'Test output' })
+
+      expect(template).toBeDefined();
+
+      // Verify internal configuration
+      const outputs = (template as any).parent.outputs;
+      expect(outputs).toHaveLength(1);
+      expect(outputs[0].type).toBe('p2pkh');
+      expect(outputs[0].satoshis).toBe(1000);
+      expect(outputs[0].description).toBe('Test output');
+      expect(outputs[0].addressOrParams).toBe(address);
+    })
+
     test('should add a P2PKH output with wallet derivation params', async () => {
       const privateKey = new PrivateKey(4);
       const wallet = await makeWallet('test', storageURL, privateKey.toHex());
@@ -147,6 +167,65 @@ describe('TransactionTemplate', () => {
       }).toThrow('description must be a string');
     });
   });
+
+  describe('addOrdinalP2PKHOutput', () => {
+    test('should add an ordinalP2PKH output with public key string', async () => {
+      const privateKey = new PrivateKey(30)
+      const wallet = await makeWallet('test', storageURL, privateKey.toHex())
+      const publicKey = privateKey.toPublicKey().toString()
+
+      const template = new TransactionBuilder(wallet)
+        .addOrdinalP2PKHOutput({ publicKey, satoshis: 1, description: 'Ordinal output' })
+
+      expect(template).toBeDefined()
+
+      // Verify internal configuration
+      const outputs = (template as any).parent.outputs
+      expect(outputs).toHaveLength(1)
+      expect(outputs[0].type).toBe('ordinalP2PKH')
+      expect(outputs[0].satoshis).toBe(1)
+      expect(outputs[0].description).toBe('Ordinal output')
+      expect(outputs[0].addressOrParams).toBe(publicKey)
+    })
+
+    test('should add an ordinalP2PKH output with address string', async () => {
+      const privateKey = new PrivateKey(31)
+      const wallet = await makeWallet('test', storageURL, privateKey.toHex())
+
+      const address = '1BoatSLRHtKNngkdXEeobR76b53LETtpyT'
+
+      const template = new TransactionBuilder(wallet)
+        .addOrdinalP2PKHOutput({ address, satoshis: 1, description: 'Ordinal output' })
+
+      expect(template).toBeDefined()
+
+      // Verify internal configuration
+      const outputs = (template as any).parent.outputs
+      expect(outputs).toHaveLength(1)
+      expect(outputs[0].type).toBe('ordinalP2PKH')
+      expect(outputs[0].satoshis).toBe(1)
+      expect(outputs[0].description).toBe('Ordinal output')
+      expect(outputs[0].addressOrParams).toBe(address)
+    })
+  })
+
+  describe('isHexPublicKey', () => {
+    test('should detect compressed/uncompressed hex public keys and reject non-hex', () => {
+      const privateKey = new PrivateKey(32)
+      const publicKey = privateKey.toPublicKey()
+
+      const compressed = publicKey.toString()
+      const uncompressed = Buffer.from(publicKey.encode(false) as number[]).toString('hex')
+      const address = publicKey.toAddress()
+
+      expect(isHexPublicKey(compressed)).toBe(true)
+      expect(isHexPublicKey(uncompressed)).toBe(true)
+      expect(isHexPublicKey(address)).toBe(false)
+
+      expect(isHexPublicKey('zz')).toBe(false)
+      expect(isHexPublicKey('11'.repeat(32))).toBe(false)
+    })
+  })
 
   describe('addCustomOutput', () => {
     test('should add a custom output with locking script', async () => {

@@ -5,6 +5,7 @@ import {
   UnlockingScript,
   Hash,
   OP,
+  Utils,
   WalletInterface,
   Script,
   TransactionSignature,
@@ -18,6 +19,7 @@ import { WalletDerivationParams } from '../types/wallet'
 import {
   P2PKHLockParams,
   P2PKHLockWithPubkeyhash,
+  P2PKHLockWithAddress,
   P2PKHLockWithPublicKey,
   P2PKHLockWithWallet,
   P2PKHUnlockParams
@@ -76,6 +78,7 @@ export default class P2PKH implements ScriptTemplate {
      * @returns A P2PKH locking script locked to the given public key hash
      */
   lock (params: P2PKHLockWithPubkeyhash): Promise<LockingScript>
+  lock (params: P2PKHLockWithAddress): Promise<LockingScript>
   /**
      * Creates a P2PKH locking script from a public key string.
      *
@@ -102,6 +105,10 @@ export default class P2PKH implements ScriptTemplate {
     if ('pubkeyhash' in params) {
       // Use byte array as hash directly
       data = params.pubkeyhash
+    } else if ('address' in params) {
+      // Extract pubkeyhash from base58check address
+      const pkh = Utils.fromBase58Check(params.address).data as number[]
+      data = pkh
     } else if ('publicKey' in params) {
       // Use public key string directly
       const pubKeyToHash = PublicKey.fromString(params.publicKey)

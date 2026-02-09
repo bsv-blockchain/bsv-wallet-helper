@@ -22,6 +22,10 @@ export interface P2PKHLockWithPublicKey {
   publicKey: string
 }
 
+export interface P2PKHLockWithAddress {
+  address: string
+}
+
 /**
  * Parameters for P2PKH lock method with wallet derivation
  *
@@ -39,6 +43,7 @@ export interface P2PKHLockWithWallet {
 export type P2PKHLockParams =
     | P2PKHLockWithPubkeyhash
     | P2PKHLockWithPublicKey
+    | P2PKHLockWithAddress
     | P2PKHLockWithWallet
 
 /**
@@ -101,6 +106,12 @@ export interface OrdinalLockWithPublicKey {
   metadata?: MAP
 }
 
+export interface OrdinalLockWithAddress {
+  address: string
+  inscription?: Inscription
+  metadata?: MAP
+}
+
 /**
  * Parameters for OrdP2PKH lock method with wallet derivation
  *
@@ -125,6 +136,7 @@ export interface OrdinalLockWithWallet {
 export type OrdinalLockParams =
     | OrdinalLockWithPubkeyhash
     | OrdinalLockWithPublicKey
+    | OrdinalLockWithAddress
     | OrdinalLockWithWallet
 
 /**

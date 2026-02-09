@@ -15,6 +15,7 @@ import { WalletDerivationParams } from '../types/wallet'
 import {
   OrdinalLockParams,
   OrdinalLockWithPubkeyhash,
+  OrdinalLockWithAddress,
   OrdinalLockWithPublicKey,
   OrdinalLockWithWallet,
   OrdinalUnlockParams
@@ -60,6 +61,7 @@ export default class OrdP2PKH implements ScriptTemplate {
 	 * @returns A P2PKH locking script with ordinal inscription
 	 */
   lock (params: OrdinalLockWithPubkeyhash): Promise<LockingScript>
+  lock (params: OrdinalLockWithAddress): Promise<LockingScript>
   /**
 	 * Creates a 1Sat Ordinal + P2PKH locking script from a public key string.
 	 *
@@ -111,12 +113,14 @@ export default class OrdP2PKH implements ScriptTemplate {
     // Determine which parameter was provided and delegate to p2pkh
     if ('pubkeyhash' in params) {
       lockingScript = await this.p2pkh.lock({ pubkeyhash: params.pubkeyhash })
+    } else if ('address' in params) {
+      lockingScript = await this.p2pkh.lock({ address: params.address })
     } else if ('publicKey' in params) {
       lockingScript = await this.p2pkh.lock({ publicKey: params.publicKey })
     } else if ('walletParams' in params) {
       lockingScript = await this.p2pkh.lock({ walletParams: params.walletParams })
     } else {
-      throw new Error('One of pubkeyhash, publicKey, or walletParams is required')
+      throw new Error('One of pubkeyhash, address, publicKey, or walletParams is required')
     }
 
     // Apply ordinal inscription and MAP metadata

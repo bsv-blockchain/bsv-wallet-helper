@@ -39,6 +39,12 @@ export interface AddP2PKHOutputWithWallet {
   description?: string
 }
 
+export interface AddP2PKHOutputWithAddress {
+  address: string
+  satoshis: number
+  description?: string
+}
+
 /**
  * Parameters for adding a P2PKH output with BRC-29 auto-derivation
  *
@@ -58,6 +64,7 @@ export interface AddP2PKHOutputWithAutoDerivation {
  */
 export type AddP2PKHOutputParams =
     | AddP2PKHOutputWithPublicKey
+    | AddP2PKHOutputWithAddress
     | AddP2PKHOutputWithWallet
     | AddP2PKHOutputWithAutoDerivation
 
@@ -129,6 +136,14 @@ export interface AddOrdinalP2PKHOutputWithPublicKey {
   description?: string
 }
 
+export interface AddOrdinalP2PKHOutputWithAddress {
+  address: string
+  satoshis: number
+  inscription?: Inscription
+  metadata?: MAP
+  description?: string
+}
+
 /**
  * Parameters for adding an ordinal P2PKH output with wallet derivation
  *
@@ -177,6 +192,7 @@ export interface AddOrdinalP2PKHOutputWithAutoDerivation {
  */
 export type AddOrdinalP2PKHOutputParams =
     | AddOrdinalP2PKHOutputWithPublicKey
+    | AddOrdinalP2PKHOutputWithAddress
     | AddOrdinalP2PKHOutputWithWallet
     | AddOrdinalP2PKHOutputWithAutoDerivation
 

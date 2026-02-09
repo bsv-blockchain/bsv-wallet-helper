@@ -13,6 +13,7 @@ export {
   type AddChangeOutputWithAutoDerivation,
   type AddChangeOutputParams,
   type AddOrdinalP2PKHOutputWithPublicKey,
+  type AddOrdinalP2PKHOutputWithAddress,
   type AddOrdinalP2PKHOutputWithWallet,
   type AddOrdinalP2PKHOutputWithAutoDerivation,
   type AddOrdinalP2PKHOutputParams,

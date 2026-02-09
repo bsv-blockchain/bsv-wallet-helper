@@ -142,6 +142,9 @@ var P2PKH = class {
     let data;
     if ("pubkeyhash" in params) {
       data = params.pubkeyhash;
+    } else if ("address" in params) {
+      const pkh = import_sdk2.Utils.fromBase58Check(params.address).data;
+      data = pkh;
     } else if ("publicKey" in params) {
       const pubKeyToHash = import_sdk2.PublicKey.fromString(params.publicKey);
       data = pubKeyToHash.toHash();
@@ -303,12 +306,14 @@ var OrdP2PKH = class {
     let lockingScript;
     if ("pubkeyhash" in params) {
       lockingScript = await this.p2pkh.lock({ pubkeyhash: params.pubkeyhash });
+    } else if ("address" in params) {
+      lockingScript = await this.p2pkh.lock({ address: params.address });
     } else if ("publicKey" in params) {
       lockingScript = await this.p2pkh.lock({ publicKey: params.publicKey });
     } else if ("walletParams" in params) {
       lockingScript = await this.p2pkh.lock({ walletParams: params.walletParams });
     } else {
-      throw new Error("One of pubkeyhash, publicKey, or walletParams is required");
+      throw new Error("One of pubkeyhash, address, publicKey, or walletParams is required");
     }
     return applyInscription(lockingScript, params.inscription, params.metadata);
   }
@@ -1002,6 +1007,9 @@ function isDerivationParams(value) {
 }
 
 // src/transaction-builder/transaction.ts
+function isHexPublicKey(value) {
+  return /^[0-9a-fA-F]+$/.test(value) && (value.length === 66 || value.length === 130);
+}
 var InputBuilder = class {
   constructor(parent, inputConfig) {
     this.parent = parent;
@@ -1556,6 +1564,8 @@ var TransactionBuilder = class {
     let addressOrParams;
     if ("publicKey" in params) {
       addressOrParams = params.publicKey;
+    } else if ("address" in params) {
+      addressOrParams = params.address;
     } else if ("walletParams" in params) {
       addressOrParams = params.walletParams;
     }
@@ -1631,6 +1641,8 @@ var TransactionBuilder = class {
     let addressOrParams;
     if ("publicKey" in params) {
       addressOrParams = params.publicKey;
+    } else if ("address" in params) {
+      addressOrParams = params.address;
     } else if ("walletParams" in params) {
       addressOrParams = params.walletParams;
     }
@@ -1783,7 +1795,11 @@ var TransactionBuilder = class {
           if (isDerivationParams(addressOrParams)) {
             lockingScript = await p2pkh.lock({ walletParams: addressOrParams });
           } else {
-            lockingScript = await p2pkh.lock({ publicKey: addressOrParams });
+            if (isHexPublicKey(addressOrParams)) {
+              lockingScript = await p2pkh.lock({ publicKey: addressOrParams });
+            } else {
+              lockingScript = await p2pkh.lock({ address: addressOrParams });
+            }
           }
           break;
         }
@@ -1811,11 +1827,19 @@ var TransactionBuilder = class {
               metadata: config.metadata
             });
           } else {
-            lockingScript = await ordinal.lock({
-              publicKey: addressOrParams,
-              inscription: config.inscription,
-              metadata: config.metadata
-            });
+            if (isHexPublicKey(addressOrParams)) {
+              lockingScript = await ordinal.lock({
+                publicKey: addressOrParams,
+                inscription: config.inscription,
+                metadata: config.metadata
+              });
+            } else {
+              lockingScript = await ordinal.lock({
+                address: addressOrParams,
+                inscription: config.inscription,
+                metadata: config.metadata
+              });
+            }
           }
           break;
         }

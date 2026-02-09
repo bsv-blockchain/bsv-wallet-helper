@@ -4,6 +4,7 @@ import {
   UnlockingScript,
   Hash,
   OP,
+  Utils,
   TransactionSignature as TransactionSignature2,
   Signature,
   PublicKey
@@ -108,6 +109,9 @@ var P2PKH = class {
     let data;
     if ("pubkeyhash" in params) {
       data = params.pubkeyhash;
+    } else if ("address" in params) {
+      const pkh = Utils.fromBase58Check(params.address).data;
+      data = pkh;
     } else if ("publicKey" in params) {
       const pubKeyToHash = PublicKey.fromString(params.publicKey);
       data = pubKeyToHash.toHash();
@@ -223,7 +227,7 @@ var P2PKH = class {
 // src/script-templates/ordinal.ts
 import {
   LockingScript as LockingScript2,
-  Utils
+  Utils as Utils2
 } from "@bsv/sdk";
 
 // src/utils/constants.ts
@@ -232,7 +236,7 @@ var DEFAULT_SAT_PER_KB = 100;
 
 // src/script-templates/ordinal.ts
 var toHex = (str) => {
-  return Utils.toHex(Utils.toArray(str));
+  return Utils2.toHex(Utils2.toArray(str));
 };
 var OrdP2PKH = class {
   /**
@@ -272,12 +276,14 @@ var OrdP2PKH = class {
     let lockingScript;
     if ("pubkeyhash" in params) {
       lockingScript = await this.p2pkh.lock({ pubkeyhash: params.pubkeyhash });
+    } else if ("address" in params) {
+      lockingScript = await this.p2pkh.lock({ address: params.address });
     } else if ("publicKey" in params) {
       lockingScript = await this.p2pkh.lock({ publicKey: params.publicKey });
     } else if ("walletParams" in params) {
       lockingScript = await this.p2pkh.lock({ walletParams: params.walletParams });
     } else {
-      throw new Error("One of pubkeyhash, publicKey, or walletParams is required");
+      throw new Error("One of pubkeyhash, address, publicKey, or walletParams is required");
     }
     return applyInscription(lockingScript, params.inscription, params.metadata);
   }
@@ -343,12 +349,12 @@ import {
   Signature as Signature2,
   TransactionSignature as TransactionSignature3,
   UnlockingScript as UnlockingScript3,
-  Utils as Utils2
+  Utils as Utils3
 } from "@bsv/sdk";
 var OLOCK_PREFIX = "2097dfd76851bf465e8f715593b217714858bbe9570ff3bd5e33840a34e20ff0262102ba79df5f8ae7604a9830f03c7933028186aede0675a16f025dc4f8be8eec0382201008ce7480da41702918d1ec8e6849ba32b4d65b1e40dc669c31a1e6306b266c0000";
 var OLOCK_SUFFIX = "615179547a75537a537a537a0079537a75527a527a7575615579008763567901c161517957795779210ac407f0e4bd44bfc207355a778b046225a7068fc59ee7eda43ad905aadbffc800206c266b30e6a1319c66dc401e5bd6b432ba49688eecd118297041da8074ce081059795679615679aa0079610079517f517f517f517f517f517f517f517f517f517f517f517f517f517f517f517f517f517f517f517f517f517f517f517f517f517f517f517f517f517f517f7c7e7c7e7c7e7c7e7c7e7c7e7c7e7c7e7c7e7c7e7c7e7c7e7c7e7c7e7c7e7c7e7c7e7c7e7c7e7c7e7c7e7c7e7c7e7c7e7c7e7c7e7c7e7c7e7c7e7c7e7c7e01007e81517a75615779567956795679567961537956795479577995939521414136d08c5ed2bf3ba048afe6dcaebafeffffffffffffffffffffffffffffff00517951796151795179970079009f63007952799367007968517a75517a75517a7561527a75517a517951795296a0630079527994527a75517a6853798277527982775379012080517f517f517f517f517f517f517f517f517f517f517f517f517f517f517f517f517f517f517f517f517f517f517f517f517f517f517f517f517f517f517f7c7e7c7e7c7e7c7e7c7e7c7e7c7e7c7e7c7e7c7e7c7e7c7e7c7e7c7e7c7e7c7e7c7e7c7e7c7e7c7e7c7e7c7e7c7e7c7e7c7e7c7e7c7e7c7e7c7e7c7e7c7e01205279947f7754537993527993013051797e527e54797e58797e527e53797e52797e57797e0079517a75517a75517a75517a75517a75517a75517a75517a75517a75517a75517a75517a75517a756100795779ac517a75517a75517a75517a75517a75517a75517a75517a75517a7561517a75517a756169587951797e58797eaa577961007982775179517958947f7551790128947f77517a75517a75618777777777777777777767557951876351795779a9876957795779ac777777777777777767006868";
 var toHex2 = (str) => {
-  return Utils2.toHex(Utils2.toArray(str));
+  return Utils3.toHex(Utils3.toArray(str));
 };
 function validateLockParams(params) {
   if (!params || typeof params !== "object") {
@@ -374,7 +380,7 @@ function validateLockParams(params) {
   }
 }
 function buildOutput(satoshis, script) {
-  const writer = new Utils2.Writer();
+  const writer = new Utils3.Writer();
   writer.writeUInt64LEBn(new BigNumber(satoshis));
   writer.writeVarIntNum(script.length);
   writer.write(script);
@@ -398,8 +404,8 @@ var OrdLock = class {
    */
   async lock(params) {
     validateLockParams(params);
-    const cancelPkh = Utils2.fromBase58Check(params.ordAddress).data;
-    const payPkh = Utils2.fromBase58Check(params.payAddress).data;
+    const cancelPkh = Utils3.fromBase58Check(params.ordAddress).data;
+    const payPkh = Utils3.fromBase58Check(params.payAddress).data;
     const inscription = {
       p: "bsv-20",
       op: "transfer",
@@ -415,8 +421,8 @@ var OrdLock = class {
     const suffixAsm = Script4.fromHex(OLOCK_SUFFIX).toASM();
     const payLockingScript = await this.p2pkh.lock({ pubkeyhash: payPkh });
     const payOutputBytes = buildOutput(params.price, payLockingScript.toBinary());
-    const payOutputHex = Utils2.toHex(payOutputBytes);
-    const cancelPkhHex = Utils2.toHex(cancelPkh);
+    const payOutputHex = Utils3.toHex(payOutputBytes);
+    const cancelPkhHex = Utils3.toHex(cancelPkh);
     const contentTypeHex = toHex2("application/bsv-20");
     const asmParts = [
       "OP_0",
@@ -531,7 +537,7 @@ var OrdLock = class {
         );
         let otherOutputs;
         if (tx.outputs.length > 2) {
-          const writer = new Utils2.Writer();
+          const writer = new Utils3.Writer();
           for (const output of tx.outputs.slice(2)) {
             writer.write(buildOutput(output.satoshis || 0, output.lockingScript.toBinary()));
           }
@@ -609,7 +615,7 @@ async function makeWallet(chain, storageURL, privateKey) {
 }
 
 // src/utils/opreturn.ts
-import { LockingScript as LockingScript4, Utils as Utils3 } from "@bsv/sdk";
+import { LockingScript as LockingScript4, Utils as Utils4 } from "@bsv/sdk";
 var isHex = (str) => {
   if (str.length === 0) return true;
   if (str.length % 2 !== 0) return false;
@@ -617,12 +623,12 @@ var isHex = (str) => {
 };
 var toHexField = (field) => {
   if (Array.isArray(field)) {
-    return Utils3.toHex(field);
+    return Utils4.toHex(field);
   }
   if (isHex(field)) {
     return field.toLowerCase();
   }
-  return Utils3.toHex(Utils3.toArray(field));
+  return Utils4.toHex(Utils4.toArray(field));
 };
 var addOpReturnData = (script, fields) => {
   if (!script || typeof script.toASM !== "function") {
@@ -667,10 +673,10 @@ var addOpReturnData = (script, fields) => {
 
 // src/utils/derivation.ts
 import { brc29ProtocolID } from "@bsv/wallet-toolbox-client";
-import { Random, Utils as Utils4, PublicKey as PublicKey3 } from "@bsv/sdk";
+import { Random, Utils as Utils5, PublicKey as PublicKey3 } from "@bsv/sdk";
 function getDerivation() {
-  const derivationPrefix = Utils4.toBase64(Random(8));
-  const derivationSuffix = Utils4.toBase64(Random(8));
+  const derivationPrefix = Utils5.toBase64(Random(8));
+  const derivationSuffix = Utils5.toBase64(Random(8));
   return {
     protocolID: brc29ProtocolID,
     keyID: derivationPrefix + " " + derivationSuffix
@@ -710,7 +716,7 @@ async function getAddress(wallet, amount = 1, counterparty = "anyone") {
 }
 
 // src/utils/scriptValidation.ts
-import { Script as Script5, Utils as Utils5 } from "@bsv/sdk";
+import { Script as Script5, Utils as Utils6 } from "@bsv/sdk";
 var SCRIPT_TEMPLATES = {
   p2pkh: {
     // OP_DUP OP_HASH160 [20 bytes] OP_EQUALVERIFY OP_CHECKSIG
@@ -875,7 +881,7 @@ function extractInscriptionData(input) {
       throw new Error("extractInscriptionData: Missing content type data at chunk 6");
     }
     try {
-      contentType = Utils5.toUTF8(contentTypeChunk.data);
+      contentType = Utils6.toUTF8(contentTypeChunk.data);
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
       throw new Error(`extractInscriptionData: Invalid UTF-8 in content type: ${message}`);
@@ -917,7 +923,7 @@ function extractMapMetadata(input) {
   }
   let prefix;
   try {
-    prefix = Utils5.toUTF8(prefixChunk.data);
+    prefix = Utils6.toUTF8(prefixChunk.data);
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
     throw new Error(`extractMapMetadata: Invalid UTF-8 in MAP prefix: ${message}`);
@@ -931,7 +937,7 @@ function extractMapMetadata(input) {
   }
   let cmd;
   try {
-    cmd = Utils5.toUTF8(cmdChunk.data);
+    cmd = Utils6.toUTF8(cmdChunk.data);
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
     throw new Error(`extractMapMetadata: Invalid UTF-8 in command: ${message}`);
@@ -948,8 +954,8 @@ function extractMapMetadata(input) {
       break;
     }
     try {
-      const key = Utils5.toUTF8(keyChunk.data);
-      const value = Utils5.toUTF8(valueChunk.data);
+      const key = Utils6.toUTF8(keyChunk.data);
+      const value = Utils6.toUTF8(valueChunk.data);
       metadata[key] = value;
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
@@ -977,7 +983,7 @@ function extractOpReturnData(input) {
   for (let i = opReturnIndex + 1; i < chunks.length; i++) {
     const chunk = chunks[i];
     if (chunk.data != null && chunk.data.length > 0) {
-      dataFields.push(Utils5.toBase64(chunk.data));
+      dataFields.push(Utils6.toBase64(chunk.data));
     }
   }
   return dataFields.length > 0 ? dataFields : null;
@@ -989,6 +995,9 @@ function isDerivationParams(value) {
 }
 
 // src/transaction-builder/transaction.ts
+function isHexPublicKey(value) {
+  return /^[0-9a-fA-F]+$/.test(value) && (value.length === 66 || value.length === 130);
+}
 var InputBuilder = class {
   constructor(parent, inputConfig) {
     this.parent = parent;
@@ -1543,6 +1552,8 @@ var TransactionBuilder = class {
     let addressOrParams;
     if ("publicKey" in params) {
       addressOrParams = params.publicKey;
+    } else if ("address" in params) {
+      addressOrParams = params.address;
     } else if ("walletParams" in params) {
       addressOrParams = params.walletParams;
     }
@@ -1618,6 +1629,8 @@ var TransactionBuilder = class {
     let addressOrParams;
     if ("publicKey" in params) {
       addressOrParams = params.publicKey;
+    } else if ("address" in params) {
+      addressOrParams = params.address;
     } else if ("walletParams" in params) {
       addressOrParams = params.walletParams;
     }
@@ -1770,7 +1783,11 @@ var TransactionBuilder = class {
           if (isDerivationParams(addressOrParams)) {
             lockingScript = await p2pkh.lock({ walletParams: addressOrParams });
           } else {
-            lockingScript = await p2pkh.lock({ publicKey: addressOrParams });
+            if (isHexPublicKey(addressOrParams)) {
+              lockingScript = await p2pkh.lock({ publicKey: addressOrParams });
+            } else {
+              lockingScript = await p2pkh.lock({ address: addressOrParams });
+            }
           }
           break;
         }
@@ -1798,11 +1815,19 @@ var TransactionBuilder = class {
               metadata: config.metadata
             });
           } else {
-            lockingScript = await ordinal.lock({
-              publicKey: addressOrParams,
-              inscription: config.inscription,
-              metadata: config.metadata
-            });
+            if (isHexPublicKey(addressOrParams)) {
+              lockingScript = await ordinal.lock({
+                publicKey: addressOrParams,
+                inscription: config.inscription,
+                metadata: config.metadata
+              });
+            } else {
+              lockingScript = await ordinal.lock({
+                address: addressOrParams,
+                inscription: config.inscription,
+                metadata: config.metadata
+              });
+            }
           }
           break;
         }

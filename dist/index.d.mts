@@ -39,6 +39,7 @@ declare class OrdP2PKH implements ScriptTemplate {
        * @returns A P2PKH locking script with ordinal inscription
        */
     lock(params: OrdinalLockWithPubkeyhash): Promise<LockingScript>;
+    lock(params: OrdinalLockWithAddress): Promise<LockingScript>;
     /**
        * Creates a 1Sat Ordinal + P2PKH locking script from a public key string.
        *
@@ -90,6 +91,9 @@ interface P2PKHLockWithPublicKey {
     /** Public key as hex string */
     publicKey: string;
 }
+interface P2PKHLockWithAddress {
+    address: string;
+}
 /**
  * Parameters for P2PKH lock method with wallet derivation
  *
@@ -103,7 +107,7 @@ interface P2PKHLockWithWallet {
  * Union type for all P2PKH lock parameter variations.
  * Use one of: pubkeyhash, publicKey, or walletParams.
  */
-type P2PKHLockParams = P2PKHLockWithPubkeyhash | P2PKHLockWithPublicKey | P2PKHLockWithWallet;
+type P2PKHLockParams = P2PKHLockWithPubkeyhash | P2PKHLockWithPublicKey | P2PKHLockWithAddress | P2PKHLockWithWallet;
 /**
  * Parameters for P2PKH unlock method
  *
@@ -161,6 +165,11 @@ interface OrdinalLockWithPublicKey {
     /** Optional MAP metadata with app, type, and custom properties */
     metadata?: MAP$1;
 }
+interface OrdinalLockWithAddress {
+    address: string;
+    inscription?: Inscription;
+    metadata?: MAP$1;
+}
 /**
  * Parameters for OrdP2PKH lock method with wallet derivation
  *
@@ -181,7 +190,7 @@ interface OrdinalLockWithWallet {
  * Use one of: pubkeyhash, publicKey, or walletParams.
  * Optionally include inscription and/or metadata for 1Sat Ordinals.
  */
-type OrdinalLockParams = OrdinalLockWithPubkeyhash | OrdinalLockWithPublicKey | OrdinalLockWithWallet;
+type OrdinalLockParams = OrdinalLockWithPubkeyhash | OrdinalLockWithPublicKey | OrdinalLockWithAddress | OrdinalLockWithWallet;
 /**
  * Parameters for OrdP2PKH unlock method (same as {@link P2PKHUnlockParams})
  */
@@ -246,6 +255,7 @@ declare class P2PKH implements ScriptTemplate {
        * @returns A P2PKH locking script locked to the given public key hash
        */
     lock(params: P2PKHLockWithPubkeyhash): Promise<LockingScript>;
+    lock(params: P2PKHLockWithAddress): Promise<LockingScript>;
     /**
        * Creates a P2PKH locking script from a public key string.
        *
@@ -473,6 +483,11 @@ interface AddP2PKHOutputWithWallet {
     /** Optional description for tracking purposes */
     description?: string;
 }
+interface AddP2PKHOutputWithAddress {
+    address: string;
+    satoshis: number;
+    description?: string;
+}
 /**
  * Parameters for adding a P2PKH output with BRC-29 auto-derivation
  *
@@ -489,7 +504,7 @@ interface AddP2PKHOutputWithAutoDerivation {
  * Union type for all P2PKH output parameter variations.
  * Use one of: publicKey, walletParams, or auto-derivation (empty params).
  */
-type AddP2PKHOutputParams = AddP2PKHOutputWithPublicKey | AddP2PKHOutputWithWallet | AddP2PKHOutputWithAutoDerivation;
+type AddP2PKHOutputParams = AddP2PKHOutputWithPublicKey | AddP2PKHOutputWithAddress | AddP2PKHOutputWithWallet | AddP2PKHOutputWithAutoDerivation;
 /**
  * Parameters for adding a change output with a public key
  *
@@ -550,6 +565,13 @@ interface AddOrdinalP2PKHOutputWithPublicKey {
     /** Optional description for tracking purposes */
     description?: string;
 }
+interface AddOrdinalP2PKHOutputWithAddress {
+    address: string;
+    satoshis: number;
+    inscription?: Inscription;
+    metadata?: MAP$1;
+    description?: string;
+}
 /**
  * Parameters for adding an ordinal P2PKH output with wallet derivation
  *
@@ -594,7 +616,7 @@ interface AddOrdinalP2PKHOutputWithAutoDerivation {
  * Use one of: publicKey, walletParams, or auto-derivation (empty params).
  * Optionally include inscription and/or metadata for 1Sat Ordinals.
  */
-type AddOrdinalP2PKHOutputParams = AddOrdinalP2PKHOutputWithPublicKey | AddOrdinalP2PKHOutputWithWallet | AddOrdinalP2PKHOutputWithAutoDerivation;
+type AddOrdinalP2PKHOutputParams = AddOrdinalP2PKHOutputWithPublicKey | AddOrdinalP2PKHOutputWithAddress | AddOrdinalP2PKHOutputWithWallet | AddOrdinalP2PKHOutputWithAutoDerivation;
 /**
  * Parameters for adding an OrdLock output.
  *
@@ -1409,4 +1431,4 @@ declare function extractOpReturnData(script: LockingScript | Script): string[] |
  */
 declare function extractOpReturnData(hex: string): string[] | null;
 
-export { type AddChangeOutputParams, type AddChangeOutputWithAutoDerivation, type AddChangeOutputWithPublicKey, type AddChangeOutputWithWallet, type AddCustomInputParams, type AddCustomOutputParams, type AddOrdLockInputParams, type AddOrdLockOutputParams, type AddOrdinalP2PKHInputParams, type AddOrdinalP2PKHOutputParams, type AddOrdinalP2PKHOutputWithAutoDerivation, type AddOrdinalP2PKHOutputWithPublicKey, type AddOrdinalP2PKHOutputWithWallet, type AddP2PKHInputParams, type AddP2PKHOutputParams, type AddP2PKHOutputWithAutoDerivation, type AddP2PKHOutputWithPublicKey, type AddP2PKHOutputWithWallet, type BuildParams, InputBuilder, type Inscription, type InscriptionData, type MAP$1 as MAP, type OrdLockCancelUnlockParams, type OrdLockLockParams, type OrdLockPurchaseUnlockParams, type OrdLockUnlockParams, type OrdinalLockParams, type OrdinalLockWithPubkeyhash, type OrdinalLockWithPublicKey, type OrdinalLockWithWallet, type OrdinalUnlockParams, OutputBuilder, type P2PKHLockParams, type P2PKHUnlockParams, type ScriptType, TransactionBuilder, type WalletDerivationParams, OrdLock as WalletOrdLock, OrdP2PKH as WalletOrdP2PKH, P2PKH as WalletP2PKH, addOpReturnData, calculatePreimage, extractInscriptionData, extractMapMetadata, extractOpReturnData, getAddress, getDerivation, getScriptType, hasOpReturnData, hasOrd, isOrdinal, isP2PKH, makeWallet };
+export { type AddChangeOutputParams, type AddChangeOutputWithAutoDerivation, type AddChangeOutputWithPublicKey, type AddChangeOutputWithWallet, type AddCustomInputParams, type AddCustomOutputParams, type AddOrdLockInputParams, type AddOrdLockOutputParams, type AddOrdinalP2PKHInputParams, type AddOrdinalP2PKHOutputParams, type AddOrdinalP2PKHOutputWithAddress, type AddOrdinalP2PKHOutputWithAutoDerivation, type AddOrdinalP2PKHOutputWithPublicKey, type AddOrdinalP2PKHOutputWithWallet, type AddP2PKHInputParams, type AddP2PKHOutputParams, type AddP2PKHOutputWithAutoDerivation, type AddP2PKHOutputWithPublicKey, type AddP2PKHOutputWithWallet, type BuildParams, InputBuilder, type Inscription, type InscriptionData, type MAP$1 as MAP, type OrdLockCancelUnlockParams, type OrdLockLockParams, type OrdLockPurchaseUnlockParams, type OrdLockUnlockParams, type OrdinalLockParams, type OrdinalLockWithPubkeyhash, type OrdinalLockWithPublicKey, type OrdinalLockWithWallet, type OrdinalUnlockParams, OutputBuilder, type P2PKHLockParams, type P2PKHUnlockParams, type ScriptType, TransactionBuilder, type WalletDerivationParams, OrdLock as WalletOrdLock, OrdP2PKH as WalletOrdP2PKH, P2PKH as WalletP2PKH, addOpReturnData, calculatePreimage, extractInscriptionData, extractMapMetadata, extractOpReturnData, getAddress, getDerivation, getScriptType, hasOpReturnData, hasOrd, isOrdinal, isP2PKH, makeWallet };

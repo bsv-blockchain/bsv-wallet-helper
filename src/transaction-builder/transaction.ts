@@ -35,6 +35,10 @@ import {
   AddCustomInputParams
 } from './types'
 
+export function isHexPublicKey (value: string): boolean {
+  return /^[0-9a-fA-F]+$/.test(value) && (value.length === 66 || value.length === 130)
+}
+
 /**
  * Builder class for configuring individual transaction inputs.
  *
@@ -675,6 +679,8 @@ export class TransactionBuilder {
     let addressOrParams: string | WalletDerivationParams | undefined
     if ('publicKey' in params) {
       addressOrParams = params.publicKey
+    } else if ('address' in params) {
+      addressOrParams = params.address
     } else if ('walletParams' in params) {
       addressOrParams = params.walletParams
     }
@@ -769,6 +775,8 @@ export class TransactionBuilder {
     let addressOrParams: string | WalletDerivationParams | undefined
     if ('publicKey' in params) {
       addressOrParams = params.publicKey
+    } else if ('address' in params) {
+      addressOrParams = params.address
     } else if ('walletParams' in params) {
       addressOrParams = params.walletParams
     }
@@ -975,8 +983,12 @@ export class TransactionBuilder {
             // Use wallet param overload
             lockingScript = await p2pkh.lock({ walletParams: addressOrParams })
           } else {
-            // Use publicKey overload
-            lockingScript = await p2pkh.lock({ publicKey: addressOrParams })
+            // Use string overload (address by default; publicKey for hex)
+            if (isHexPublicKey(addressOrParams)) {
+              lockingScript = await p2pkh.lock({ publicKey: addressOrParams })
+            } else {
+              lockingScript = await p2pkh.lock({ address: addressOrParams })
+            }
           }
           break
         }
@@ -1011,12 +1023,20 @@ export class TransactionBuilder {
               metadata: config.metadata
             })
           } else {
-            // Use publicKey overload
-            lockingScript = await ordinal.lock({
-              publicKey: addressOrParams,
-              inscription: config.inscription,
-              metadata: config.metadata
-            })
+            // Use string overload (address by default; publicKey for hex)
+            if (isHexPublicKey(addressOrParams)) {
+              lockingScript = await ordinal.lock({
+                publicKey: addressOrParams,
+                inscription: config.inscription,
+                metadata: config.metadata
+              })
+            } else {
+              lockingScript = await ordinal.lock({
+                address: addressOrParams,
+                inscription: config.inscription,
+                metadata: config.metadata
+              })
+            }
           }
           break
         }
