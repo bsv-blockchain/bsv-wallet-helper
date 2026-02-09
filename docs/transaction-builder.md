@@ -756,6 +756,29 @@ console.log(preview.outputs, preview.options);
 
 ---
 
+#### `pay()`
+
+Create a minimal P2PKH payment to a public key (hex) or base58 address, then call `build()`.
+
+```typescript
+import { getAddress, TransactionBuilder } from '@bsv/wallet-helper'
+
+const addressRes = await getAddress(wallet)
+const address = addressRes[0].address
+const walletParams = addressRes[0].walletParams
+console.log(`   State receive address: ${address}`)
+console.log('   State walletParams:', walletParams)
+
+const amount = 1
+
+const payRes = await new TransactionBuilder(serverWallet)
+  .pay(stateAddress, amount)
+
+console.log('Pay txid:', payRes.txid)
+```
+
+---
+
 ## Examples
 
 ### Simple Payment

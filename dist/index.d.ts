@@ -1101,6 +1101,20 @@ declare class TransactionBuilder {
        * @returns Promise resolving to the createAction arguments object
        */
     preview(): Promise<any>;
+    /**
+       * Create a minimal P2PKH payment and execute it.
+       *
+       * This convenience method adds a single P2PKH output to the given destination
+       * (either a hex public key or a base58 address), disables output randomization,
+       * then calls build().
+       *
+       * @param to - Destination (hex public key or base58 address)
+       * @param satoshis - Amount to send in satoshis (must be non-negative)
+       * @returns Promise resolving to txid and tx from wallet.createAction()/wallet.signAction()
+       * @throws Error if to is not a string
+       * @throws Error if satoshis is not a non-negative number
+       */
+    pay(to: string, satoshis: number): Promise<CreateActionResult | any>;
 }
 
 /**

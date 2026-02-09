@@ -216,7 +216,7 @@ describe('TransactionTemplate', () => {
 
       const compressed = publicKey.toString()
       const uncompressed = Buffer.from(publicKey.encode(false) as number[]).toString('hex')
-      const address = publicKey.toAddress()
+      const address = publicKey.toAddress().toString()
 
       expect(isHexPublicKey(compressed)).toBe(true)
       expect(isHexPublicKey(uncompressed)).toBe(true)
@@ -224,6 +224,62 @@ describe('TransactionTemplate', () => {
 
       expect(isHexPublicKey('zz')).toBe(false)
       expect(isHexPublicKey('11'.repeat(32))).toBe(false)
+    })
+  })
+
+  describe('pay', () => {
+    test('should pay to a publicKey with a minimal P2PKH output', async () => {
+      const privateKey = new PrivateKey(40)
+      const wallet = await makeWallet('test', storageURL, privateKey.toHex())
+      const publicKey = privateKey.toPublicKey().toString()
+
+      const mockTxid = '0000000000000000000000000000000000000000000000000000000000000040'
+      const mockTx = { id: () => mockTxid }
+
+      // @ts-ignore
+      wallet.createAction = jest.fn().mockResolvedValue({ txid: mockTxid, tx: mockTx })
+      // @ts-ignore
+      wallet.signAction = jest.fn()
+
+      const res = await new TransactionBuilder(wallet).pay(publicKey, 1234)
+
+      expect(wallet.createAction).toHaveBeenCalledTimes(1)
+      // @ts-ignore
+      const args = (wallet.createAction as any).mock.calls[0][0]
+      expect(args.outputs).toHaveLength(1)
+      expect(args.outputs[0].satoshis).toBe(1234)
+      expect(args.outputs[0].outputDescription).toBe('Transaction output')
+
+      expect(wallet.signAction).not.toHaveBeenCalled()
+      expect(res.txid).toBe(mockTxid)
+      expect(res.tx).toBe(mockTx)
+    })
+
+    test('should pay to an address with a minimal P2PKH output', async () => {
+      const privateKey = new PrivateKey(41)
+      const wallet = await makeWallet('test', storageURL, privateKey.toHex())
+      const address = privateKey.toPublicKey().toAddress().toString()
+
+      const mockTxid = '0000000000000000000000000000000000000000000000000000000000000041'
+      const mockTx = { id: () => mockTxid }
+
+      // @ts-ignore
+      wallet.createAction = jest.fn().mockResolvedValue({ txid: mockTxid, tx: mockTx })
+      // @ts-ignore
+      wallet.signAction = jest.fn()
+
+      const res = await new TransactionBuilder(wallet).pay(address, 500)
+
+      expect(wallet.createAction).toHaveBeenCalledTimes(1)
+      // @ts-ignore
+      const args = (wallet.createAction as any).mock.calls[0][0]
+      expect(args.outputs).toHaveLength(1)
+      expect(args.outputs[0].satoshis).toBe(500)
+      expect(args.outputs[0].outputDescription).toBe('Transaction output')
+
+      expect(wallet.signAction).not.toHaveBeenCalled()
+      expect(res.txid).toBe(mockTxid)
+      expect(res.tx).toBe(mockTx)
     })
   })
 

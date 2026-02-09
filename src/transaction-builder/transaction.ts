@@ -1282,7 +1282,7 @@ export class TransactionBuilder {
       description: this._transactionDescription || 'Transaction',
       ...((inputBEEF != null) && { inputBEEF }),
       ...(actionInputsConfig.length > 0 && { inputs: actionInputsConfig }),
-      outputs: actionOutputs,
+      ...(actionOutputs.length > 0 && { outputs: actionOutputs }),
       options: createActionOptions
     }
 
@@ -1351,5 +1351,37 @@ export class TransactionBuilder {
      */
   async preview (): Promise<any> {
     return await this.build({ preview: true })
+  }
+
+  /**
+     * Create a minimal P2PKH payment and execute it.
+     *
+     * This convenience method adds a single P2PKH output to the given destination
+     * (either a hex public key or a base58 address), disables output randomization,
+     * then calls build().
+     *
+     * @param to - Destination (hex public key or base58 address)
+     * @param satoshis - Amount to send in satoshis (must be non-negative)
+     * @returns Promise resolving to txid and tx from wallet.createAction()/wallet.signAction()
+     * @throws Error if to is not a string
+     * @throws Error if satoshis is not a non-negative number
+     */
+  async pay (to: string, satoshis: number): Promise<CreateActionResult | any> {
+    if (typeof to !== 'string') {
+      throw new Error('to must be a string')
+    }
+    if (typeof satoshis !== 'number' || satoshis < 0) {
+      throw new Error('satoshis must be a non-negative number')
+    }
+
+    if (isHexPublicKey(to)) {
+      this.addP2PKHOutput({ publicKey: to, satoshis })
+    } else {
+      this.addP2PKHOutput({ address: to, satoshis })
+    }
+
+    this.options({ randomizeOutputs: false })
+
+    return await this.build()
   }
 }
