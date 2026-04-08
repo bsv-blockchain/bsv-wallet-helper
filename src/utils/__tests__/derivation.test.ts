@@ -73,7 +73,7 @@ describe('getAddress', () => {
       expect(results[0].walletParams.keyID).toContain(' '); // Should have space separator
       const parts = results[0].walletParams.keyID.split(' ');
       expect(parts).toHaveLength(2); // prefix + suffix
-      expect(results[0].walletParams.counterparty).toBe('anyone');
+      expect(results[0].walletParams.counterparty).toBe('self');
       expect(Array.isArray(results[0].walletParams.protocolID)).toBe(true);
     });
   });
@@ -131,7 +131,7 @@ describe('getAddress', () => {
         expect(result.address).toBeTruthy();
         expect(result.walletParams.keyID).toBeTruthy();
         expect(result.walletParams.keyID).toContain(' ');
-        expect(result.walletParams.counterparty).toBe('anyone');
+        expect(result.walletParams.counterparty).toBe('self');
       });
     });
   });
