@@ -1,5 +1,9 @@
 # BSV Wallet Helper
 
+> **⚠️ This repository is being archived.**
+>
+> Development has moved to the [ts-stack monorepo](https://github.com/bsv-blockchain/ts-stack/tree/main/packages/helpers/bsv-wallet-helper). Open issues will be migrated there. This repository will be archived in the coming days — please open new issues and PRs in the monorepo going forward.
+
 Wallet-compatible utilities and script templates for Bitcoin SV (BSV) that support BRC-100 wallet interfaces instead of requiring direct private key access.
 
 ## Features
